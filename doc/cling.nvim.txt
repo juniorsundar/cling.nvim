@@ -99,6 +99,24 @@ your wrappers:
 
 
 
+CACHING & UPDATES ~
+
+To optimize performance, `cling.nvim` parses and caches the generated
+completions in `stdpath("data")/cling/completions/<binary>.lua`.
+
+These cached files are loaded on subsequent startups to avoid expensive
+re-parsing. If you update the underlying CLI tool or want to refresh the
+completions, you can force a re-parse by passing the `--reparse-completions`
+flag to your wrapper command:
+
+>vim
+    :<WrapperCommand> --reparse-completions
+<
+
+You can also manually add completions if you want as they are all just `.lua`
+files that export a table.
+
+
 EXAMPLES                                                 *cling.nvim-examples*
 
 
