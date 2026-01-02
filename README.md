@@ -1,9 +1,35 @@
+<div align="center">
+
 # cling.nvim
 
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/juniorsundar/cling.nvim/lint-test.yml?branch=main&style=for-the-badge)
 ![Lua](https://img.shields.io/badge/Made%20with%20Lua-blueviolet.svg?style=for-the-badge&logo=lua)
 
-`cling.nvim` allows you to wrap CLI commands, providing structured output buffers and recursive help-based completions.
+![](./assets/clinging.jpg)
+
+
+</div>
+<div align="center">
+<br>
+</div>
+
+
+`cling.nvim` implements a customisable and thin CLI wrapper around executable binaries in Neovim.
+
+It can be used to quickly execute terminal commands:
+- without leaving the Neovim context via multiplexing or `Ctrl+z`, 
+- without losing the text formatting of the command outputs,
+- and also to interact with the output of those commands as a text-buffer.
+
+The plugin can also be configured to wrap CLI commands that you commonly use (like `jj`, `docker`, etc.) and:
+- automatically generate tab-completions in Neovim,
+- implement custom keymaps for those wrapped CLI output buffers.
+
+> [!NOTE]
+> 
+> Autogenerating tab-completions in Neovim is an experimental feature.
+> 
+> It may not work for all available CLI tools as there is standard way to implement subcommands and completion functions in Bash.
 
 ## Installation
 
@@ -27,10 +53,10 @@ return {
 
 The plugin exposes the global `:Cling` command, which serves as a generic entry point for executing shell commands within the plugin's environment:
 
-*   **:Cling**: Opens an input prompt to enter a shell command interactively.
-*   **:Cling with-env**: Executes command with an `.env` file assigned interactively.
-*   **:Cling last**: Executes the last executed command with `.env`.
-*   **:Cling -- <command>**: Executes the command, treating everything after `--` as the command string. This is useful if your command contains flags that might be misinterpreted.
+*   **`:Cling`**: Opens an input prompt to enter a shell command interactively.
+*   **`:Cling with-env`**: Executes command with an `.env` file assigned interactively.
+*   **`:Cling last`**: Executes the last executed command with `.env`.
+*   **`:Cling -- <command>`**: Executes the command, treating everything after `--` as the command string. This defaults to executing in current working directory.
 
 ### Output Buffer Keymaps
 
@@ -62,10 +88,11 @@ You can define custom wrappers for your CLI tools in the `setup` function. Wrapp
 
 ## Examples
 
-<details>
-<summary><b>Wrapping Jujutsu (jj)</b></summary>
+### Wrapping Jujutsu (jj) with custom keymaps
 
-This example shows how to wrap the [Jujutsu](https://github.com/martinvonz/jj) VCS. It uses the `completion_cmd` method to generate completions dynamically.
+This example shows how to wrap the [Jujutsu](https://github.com/martinvonz/jj) VCS and to implement a custom keymap to send the outputs of `jj show` to a quickfix list.
+
+It uses the `completion_cmd` method to generate completions dynamically.
 
 ```lua
 return {
@@ -163,26 +190,35 @@ return {
 
 </details>
 
-<details>
-<summary><b>Other Completion Examples</b></summary>
+
+### Different methods of generating tab-completion
+
+Generating tab-completions can be achieved through following 4 methods:
 
 ```lua
 wrappers = {
-  -- Method 1: Recursive Help Crawling
+    -- Method 1: Recursive Help Crawling
     {
         binary = "docker",
         command = "Docker",
         help_cmd = "--help",
     },
   
-  -- Method 3: Local File
+    -- Method 2: Completion Command
+    {
+        binary = "jj",
+        command = "JJ",
+        completion_cmd = "jj util completion bash",
+    },
+
+    -- Method 3: Local File
     {
         binary = "git",
         command = "Git",
         completion_file = "/usr/share/bash-completion/completions/git",
     },
 
-  -- Method 4: Remote URL (requires curl)
+    -- Method 4: Remote URL (requires curl)
     {
         binary = "eza",
         command = "Eza",
@@ -190,5 +226,3 @@ wrappers = {
     },
 }
 ```
-
-</details>
