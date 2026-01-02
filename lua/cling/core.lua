@@ -20,7 +20,7 @@ M.last_cwd = nil
 --- @type string|nil
 M.last_env = nil
 --- @type integer|nil
-M.cling_window = nil
+M.cling_window = niljuniorsundar / cling.nvim
 --- @type integer|nil
 M.cling_buffer = nil
 

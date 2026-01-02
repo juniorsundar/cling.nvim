@@ -134,9 +134,19 @@ function M.on_cli_command(args)
         end
         core.executor(table.concat(cmd_parts, " "), vim.fn.getcwd())
         return
+    elseif fargs[1] == "with-env" then
+        M.with_env()
+        return
+    elseif fargs[1] == "last" then
+        M.run_last()
+        return
+    else
+        vim.notify(
+            "Error: Unknown argument '" .. fargs[1] .. "'. Did you mean --, with-env, or last?",
+            vim.log.levels.ERROR
+        )
+        return
     end
-
-    core.executor(table.concat(fargs, " "), vim.fn.getcwd())
 end
 
 --- Sets up the cling plugin with the provided options.
@@ -181,7 +191,7 @@ function M.setup(args)
                 end
 
                 if current_node == completions then
-                    table.insert(candidates, "reparse-completions")
+                    table.insert(candidates, "--reparse-completions")
                 end
 
                 if current_node.completion_type then
@@ -202,7 +212,7 @@ function M.setup(args)
             end
 
             vim.api.nvim_create_user_command(wrapper.command, function(cargs)
-                if cargs.fargs[1] == "reparse-completions" then
+                if cargs.fargs[1] == "--reparse-completions" then
                     completions = generate_completion(wrapper, true)
                     vim.notify("Reparsed completions for " .. wrapper.binary, vim.log.levels.INFO)
                     return
@@ -217,10 +227,6 @@ function M.setup(args)
                 core.executor(cmd, vim.fn.getcwd(), {
                     title = "[" .. wrapper.command .. "]",
                     on_open = function(buf)
-                        vim.keymap.set("n", "<esc>", function()
-                            core.close_cling_window()
-                        end, { buffer = buf, silent = true })
-
                         if wrapper.keymaps then
                             wrapper.keymaps(buf)
                         end
