@@ -24,8 +24,9 @@ Neovim, - implement custom keymaps for those wrapped CLI output buffers.
 
   [!NOTE]
   Autogenerating tab-completions in Neovim is an experimental feature.
-  It may not work for all available CLI tools as there is standard way to
-  implement subcommands and completion functions in Bash.
+  It may not work for all available CLI tools as there is no standard way to
+  implement subcommands and completion functions in Bash. If such as instance is
+  encountered, please raise an Issue ticket.
 
 INSTALLATION                                         *cling.nvim-installation*
 
