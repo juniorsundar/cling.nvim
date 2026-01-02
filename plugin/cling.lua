@@ -11,7 +11,8 @@ end, {
     complete = function(arglead, cmdline, _)
         local completions = { "with-env", "last", "--" }
 
-        if cmdline:find "%-%-" then
+        local args = vim.split(cmdline, "%s+", { trimempty = true })
+        if #args > 2 or (#args == 2 and arglead == "") then
             return {}
         end
 

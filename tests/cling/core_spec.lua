@@ -2,12 +2,10 @@ local core = require "cling.core"
 
 describe("core", function()
     before_each(function()
-        -- Reset state
         if core.cling_window and vim.api.nvim_win_is_valid(core.cling_window) then
             vim.api.nvim_win_close(core.cling_window, true)
         end
 
-        -- Force delete any buffer named [Cling] or [Cling] (1) etc just in case
         for _, buf in ipairs(vim.api.nvim_list_bufs()) do
             local name = vim.api.nvim_buf_get_name(buf)
             if name:match "%[Cling%]" then
