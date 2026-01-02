@@ -5,8 +5,7 @@
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/juniorsundar/cling.nvim/lint-test.yml?branch=main&style=for-the-badge)
 ![Lua](https://img.shields.io/badge/Made%20with%20Lua-blueviolet.svg?style=for-the-badge&logo=lua)
 
-![](./assets/clinging.jpg)
-
+<img src="./assets/clinging.jpg" width="25%" />
 
 </div>
 <div align="center">
@@ -29,7 +28,8 @@ The plugin can also be configured to wrap CLI commands that you commonly use (li
 > 
 > Autogenerating tab-completions in Neovim is an experimental feature.
 > 
-> It may not work for all available CLI tools as there is standard way to implement subcommands and completion functions in Bash.
+> It may not work for all available CLI tools as there is no standard way to implement subcommands and completion functions in Bash.
+> If such as instance is encountered, please raise an Issue ticket.
 
 ## Installation
 
