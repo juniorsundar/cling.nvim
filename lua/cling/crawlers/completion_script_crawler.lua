@@ -20,7 +20,7 @@ end
 -- Utility to split string by newline
 local function split_lines(str)
     local lines = {}
-    for line in str:gmatch("[^\r\n]+") do
+    for line in str:gmatch "[^\r\n]+" do
         table.insert(lines, line)
     end
     return lines
@@ -29,18 +29,22 @@ end
 -- Find entrypoint function name in bash script
 local function find_entrypoint(script_path, binary_name)
     local f = io.open(script_path, "r")
-    if not f then return nil end
-    local content = f:read("*a")
+    if not f then
+        return nil
+    end
+    local content = f:read "*a"
     f:close()
 
-    for line in content:gmatch("[^\r\n]+") do
-        if line:match("^%s*complete") and line:match("%-F") and line:match(binary_name) then
-            local func_name = line:match("%-F%s+([%w_:]+)")
-            if func_name then return func_name end
+    for line in content:gmatch "[^\r\n]+" do
+        if line:match "^%s*complete" and line:match "%-F" and line:match(binary_name) then
+            local func_name = line:match "%-F%s+([%w_:]+)"
+            if func_name then
+                return func_name
+            end
         end
     end
 
-    local func_name = content:match("complete%s+.-%-F%s+([%w_:]+)")
+    local func_name = content:match "complete%s+.-%-F%s+([%w_:]+)"
     return func_name
 end
 
@@ -48,7 +52,8 @@ end
 local function get_completions(bash_script, func_name, command_line)
     local wrapper = get_bash_wrapper()
 
-    local cmd = string.format("%s %s %s %s",
+    local cmd = string.format(
+        "%s %s %s %s",
         vim.fn.shellescape(wrapper),
         vim.fn.shellescape(bash_script),
         vim.fn.shellescape(func_name),
@@ -61,7 +66,7 @@ local function get_completions(bash_script, func_name, command_line)
     local distinct = {}
 
     for _, line in ipairs(raw_lines) do
-        local trimmed = line:match("^%s*(.-)%s*$")
+        local trimmed = line:match "^%s*(.-)%s*$"
         if trimmed ~= "" and not seen[trimmed] then
             seen[trimmed] = true
             table.insert(distinct, trimmed)
@@ -75,11 +80,11 @@ end
 local function build_tree(bash_script, func_name, binary_name, max_depth)
     local tree = {
         flags = {},
-        subcommands = {}
+        subcommands = {},
     }
 
     local queue = {}
-    table.insert(queue, {binary_name, 0, tree})
+    table.insert(queue, { binary_name, 0, tree })
 
     local head = 1
 
@@ -125,7 +130,7 @@ local function build_tree(bash_script, func_name, binary_name, max_depth)
                 for _, sub in ipairs(subcommands) do
                     current_node.subcommands[sub] = {}
                     local new_cmd = current_cmd .. " " .. sub
-                    table.insert(queue, {new_cmd, depth + 1, current_node.subcommands[sub]})
+                    table.insert(queue, { new_cmd, depth + 1, current_node.subcommands[sub] })
                 end
             end
         end
