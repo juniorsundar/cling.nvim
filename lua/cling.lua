@@ -1,10 +1,8 @@
 local core = require "cling.core"
 local utils = require "cling.utils"
-local parser = require "cling.parser"
-local crawler = require "cling.crawlers.help_crawler"
-local script_crawler = require "cling.crawlers.completion_script_crawler"
 
---- @class cling.Config
+---
+-- @class cling.Config
 --- @field wrappers? cling.Wrapper[] List of wrappers to configure during setup.
 local config = {
     wrappers = {},
@@ -12,52 +10,23 @@ local config = {
 
 local M = {}
 
---- @type cling.Config
+---
+-- @type cling.Config
 M.config = config
 
---- Serializes the completion table into a Lua string.
----
---- @param tbl cling.CommandNode The completion data to serialize.
---- @param indent? string Indentation string.
---- @return string result The serialized Lua table string.
-local function serialize(tbl, indent)
-    indent = indent or "  "
-    local result = "{\n"
-
-    if tbl.completion_type then
-        result = result .. indent .. string.format("completion_type = %q,\n", tbl.completion_type)
-    end
-
-    -- Serialize flags
-    result = result .. indent .. "flags = {"
-    if tbl.flags then
-        for _, v in ipairs(tbl.flags) do
-            result = result .. string.format("%q, ", v)
-        end
-    end
-    result = result .. "},\n"
-
-    -- Serialize subcommands recursively
-    result = result .. indent .. "subcommands = {\n"
-    if tbl.subcommands then
-        for cmd, node in pairs(tbl.subcommands) do
-            result = result .. indent .. string.format("  [%q] = ", cmd)
-            result = result .. serialize(node, indent .. "    ") .. ",\n"
-        end
-    end
-    result = result .. indent .. "}\n"
-
-    result = result .. indent:sub(1, -3) .. "}"
-    return result
+local function get_plugin_root()
+    local str = debug.getinfo(1, "S").source:sub(2)
+    return str:match "(.*)/lua/cling%.lua$"
 end
 
---- Generates or retrieves cached completion data for a wrapper.
---- Fetches from URL or executes command if necessary, then parses and caches the result.
 ---
---- @param wrapper cling.Wrapper The wrapper configuration.
---- @param force? boolean If true, forces regeneration of the completion cache.
---- @return cling.CommandNode completions The generated or cached completion data.
-local function generate_completion(wrapper, force)
+-- Generates or retrieves cached completion data for a wrapper.
+-- Fetches from URL or executes command if necessary, then parses and caches the result.
+--
+-- @param wrapper cling.Wrapper The wrapper configuration.
+-- @param on_complete fun(completions: cling.CommandNode) Callback when completions are available.
+-- @param force? boolean If true, forces regeneration of the completion cache.
+local function ensure_completion(wrapper, on_complete, force)
     local cache_dir = vim.fn.stdpath "data" .. "/cling/completions"
     if vim.fn.isdirectory(cache_dir) == 0 then
         vim.fn.mkdir(cache_dir, "p")
@@ -68,72 +37,72 @@ local function generate_completion(wrapper, force)
     if not force and vim.fn.filereadable(cache_file) == 1 then
         local chunk = loadfile(cache_file)
         if chunk then
-            return chunk()
+            on_complete(chunk())
+            return
         end
     end
 
-    local completions = nil
+    local method = nil
+    local value = nil
 
     if wrapper.help_cmd then
-        completions = crawler.generate(wrapper.binary, wrapper.help_cmd)
+        method = "help_cmd"
+        value = wrapper.help_cmd
     elseif wrapper.completion_file then
-        local file_path = wrapper.completion_file
-        local temp_file = nil
-
-        if wrapper.completion_file:match "^https?://" then
-            temp_file = vim.fn.tempname()
-            vim.notify(
-                string.format("Fetching completions for %s from %s", wrapper.binary, wrapper.completion_file),
-                vim.log.levels.INFO
-            )
-            vim.fn.system { "curl", "-s", "-o", temp_file, wrapper.completion_file }
-            file_path = temp_file
-        else
-            file_path = vim.fn.expand(wrapper.completion_file)
-        end
-
-        if vim.fn.filereadable(file_path) == 1 then
-            completions = script_crawler.generate(wrapper.binary, file_path)
-        else
-            vim.notify("Completion file not readable: " .. file_path, vim.log.levels.ERROR)
-        end
-
-        if temp_file and vim.fn.filereadable(temp_file) == 1 then
-            os.remove(temp_file)
-        end
+        method = "completion_file"
+        value = wrapper.completion_file
     elseif wrapper.completion_cmd then
-        local temp_file = vim.fn.tempname()
-        vim.fn.system(wrapper.completion_cmd .. " > " .. temp_file)
+        method = "completion_cmd"
+        value = wrapper.completion_cmd
+    end
 
-        local ok, result = pcall(function()
-            return script_crawler.generate(wrapper.binary, temp_file)
-        end)
+    if not method then
+        return
+    end
 
-        if ok and result then
-            completions = result
+    local plugin_root = get_plugin_root()
+    if not plugin_root then
+        vim.notify("Could not determine plugin root for cling.nvim", vim.log.levels.ERROR)
+        return
+    end
+
+    local script_path = plugin_root .. "/lua/cling/jobs/generator.lua"
+
+    vim.notify("Generating completions for " .. wrapper.binary .. " in background...", vim.log.levels.INFO)
+
+    vim.system({
+        "nvim",
+        "-l",
+        script_path,
+        plugin_root,
+        cache_file,
+        wrapper.binary,
+        method,
+        value,
+    }, { text = true }, function(obj)
+        if obj.code == 0 then
+            vim.schedule(function()
+                local chunk = loadfile(cache_file)
+                if chunk then
+                    on_complete(chunk())
+                    vim.notify("Completions for " .. wrapper.binary .. " ready!", vim.log.levels.INFO)
+                else
+                    vim.notify("Failed to load completions for " .. wrapper.binary, vim.log.levels.ERROR)
+                end
+            end)
         else
-            -- Fallback: read content and parse as help text
-            local content = utils.read_file(temp_file)
-            if content and content ~= "" then
-                completions = parser.parse(wrapper.binary, content)
-            end
+            vim.schedule(function()
+                vim.notify(
+                    "Failed to generate completions for " .. wrapper.binary .. "\n" .. (obj.stderr or ""),
+                    vim.log.levels.ERROR
+                )
+            end)
         end
-
-        os.remove(temp_file)
-    end
-
-    if completions then
-        local lua_str = "return " .. serialize(completions)
-        utils.write_file(cache_file, lua_str)
-        return completions
-    else
-        vim.notify("Failed to obtain completion content for " .. wrapper.binary, vim.log.levels.ERROR)
-    end
-
-    return { flags = {}, subcommands = {} }
+    end)
 end
 
---- Prompts for an environment file and sets it for the next command.
+---
+-- Prompts for an environment file and sets it for the next command.
 function M.with_env()
     local env_file =
         vim.fn.input("Path to .env file: ", core.last_env or vim.fs.joinpath(vim.fn.getcwd(), ".env"), "file")
@@ -145,7 +114,8 @@ function M.with_env()
     M.on_cli_command { fargs = {} }
 end
 
---- Re-runs the last executed command.
+---
+-- Re-runs the last executed command.
 function M.run_last()
     if core.last_cmd then
         core.executor(core.last_cmd, core.last_cwd or vim.fn.getcwd())
@@ -154,8 +124,9 @@ function M.run_last()
     end
 end
 
---- Handles the generic Cling command execution.
---- @param args table Command arguments (fargs).
+---
+-- Handles the generic Cling command execution.
+-- @param args table Command arguments (fargs).
 function M.on_cli_command(args)
     local fargs = args.fargs
     if #fargs == 0 then
@@ -198,16 +169,23 @@ function M.on_cli_command(args)
     end
 end
 
---- Sets up the cling plugin with the provided options.
---- Configures wrappers.
 ---
---- @param args? cling.Config Configuration options.
+-- Sets up the cling plugin with the provided options.
+-- Configures wrappers.
+--
+-- @param args? cling.Config Configuration options.
 function M.setup(args)
     M.config = vim.tbl_deep_extend("force", M.config, args or {})
 
     if M.config.wrappers then
         for _, wrapper in ipairs(M.config.wrappers) do
-            local completions = generate_completion(wrapper)
+            local completions = { flags = {}, subcommands = {} }
+
+            local function update_completions(new_completions)
+                completions = new_completions
+            end
+
+            ensure_completion(wrapper, update_completions)
 
             local complete_func = function(arglead, cmdline, _)
                 local args = vim.split(cmdline, "%s+")
@@ -262,8 +240,7 @@ function M.setup(args)
 
             vim.api.nvim_create_user_command(wrapper.command, function(cargs)
                 if cargs.fargs[1] == "--reparse-completions" then
-                    completions = generate_completion(wrapper, true)
-                    vim.notify("Reparsed completions for " .. wrapper.binary, vim.log.levels.INFO)
+                    ensure_completion(wrapper, update_completions, true)
                     return
                 end
 

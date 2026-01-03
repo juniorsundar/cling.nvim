@@ -34,6 +34,31 @@ if ! declare -F _get_comp_words_by_ref >/dev/null; then
     }
 fi
 
+if ! type complete >/dev/null 2>&1; then
+    complete() { :; }
+fi
+
+if ! type compgen >/dev/null 2>&1; then
+    compgen() {
+        local OPTIND=1
+        local words=""
+        while getopts "W:f" opt; do
+            case "$opt" in
+                W) words="$OPTARG" ;;
+            esac
+        done
+        shift $((OPTIND-1))
+        local cur="$1"
+        for w in $words; do
+            [[ "$w" == "$cur"* ]] && echo "$w"
+        done
+    }
+fi
+
+# compopt is a builtin in bash 4+ but fails if not running inside actual
+# completion override to avoid errors when running script
+compopt() { :; }
+
 source "$SCRIPT_FILE"
 
 read -a COMP_WORDS <<< "$COMMAND_LINE"
