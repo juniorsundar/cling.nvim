@@ -1,4 +1,4 @@
---- @module 'cling.crawler'
+--- @module 'cling.crawlers.help_crawler'
 local parser = require "cling.parser"
 
 local M = {}

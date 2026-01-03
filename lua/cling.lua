@@ -1,7 +1,8 @@
 local core = require "cling.core"
 local utils = require "cling.utils"
 local parser = require "cling.parser"
-local crawler = require "cling.crawler"
+local crawler = require "cling.crawlers.help_crawler"
+local script_crawler = require "cling.crawlers.completion_script_crawler"
 
 --- @class cling.Config
 --- @field wrappers? cling.Wrapper[] List of wrappers to configure during setup.
@@ -75,31 +76,36 @@ local function generate_completion(wrapper, force)
 
     if wrapper.help_cmd then
         completions = crawler.generate(wrapper.binary, wrapper.help_cmd)
-    elseif wrapper.completion_file or wrapper.completion_cmd then
-        local content = nil
-        if wrapper.completion_file then
-            if wrapper.completion_file:match "^https?://" then
-                vim.notify(
-                    string.format("Fetching completions for %s from %s", wrapper.binary, wrapper.completion_file),
-                    vim.log.levels.INFO
-                )
-                local handle = io.popen("curl -s " .. vim.fn.shellescape(wrapper.completion_file))
-                if handle then
-                    content = handle:read "*a"
-                    handle:close()
-                end
-            else
-                content = utils.read_file(wrapper.completion_file)
-            end
-        elseif wrapper.completion_cmd then
-            local handle = io.popen(wrapper.completion_cmd)
-            if handle then
-                content = handle:read "*a"
-                handle:close()
-            end
+    elseif wrapper.completion_file then
+        local file_path = wrapper.completion_file
+        local temp_file = nil
+
+        if wrapper.completion_file:match "^https?://" then
+            temp_file = vim.fn.tempname()
+            vim.notify(
+                string.format("Fetching completions for %s from %s", wrapper.binary, wrapper.completion_file),
+                vim.log.levels.INFO
+            )
+            vim.fn.system({ "curl", "-s", "-o", temp_file, wrapper.completion_file })
+            file_path = temp_file
+        else
+            file_path = vim.fn.expand(wrapper.completion_file)
         end
 
-        if content then
+        if vim.fn.filereadable(file_path) == 1 then
+            completions = script_crawler.generate(wrapper.binary, file_path)
+        else
+            vim.notify("Completion file not readable: " .. file_path, vim.log.levels.ERROR)
+        end
+
+        if temp_file and vim.fn.filereadable(temp_file) == 1 then
+            os.remove(temp_file)
+        end
+    elseif wrapper.completion_cmd then
+        local handle = io.popen(wrapper.completion_cmd)
+        if handle then
+            local content = handle:read "*a"
+            handle:close()
             completions = parser.parse(wrapper.binary, content)
         end
     end
