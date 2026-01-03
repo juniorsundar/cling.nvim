@@ -95,14 +95,26 @@ local function build_tree(bash_script, func_name, binary_name, max_depth)
             local query_cmd = current_cmd .. " "
             local candidates = get_completions(bash_script, func_name, query_cmd)
 
+            -- Also try to fetch flags explicitly
+            local flag_query_cmd = current_cmd .. " -"
+            local flag_candidates = get_completions(bash_script, func_name, flag_query_cmd)
+
+            for _, cand in ipairs(flag_candidates) do
+                table.insert(candidates, cand)
+            end
+
             local flags = {}
             local subcommands = {}
+            local seen_candidates = {}
 
             for _, cand in ipairs(candidates) do
-                if cand:sub(1, 1) == "-" then
-                    table.insert(flags, cand)
-                else
-                    table.insert(subcommands, cand)
+                if not seen_candidates[cand] then
+                    seen_candidates[cand] = true
+                    if cand:sub(1, 1) == "-" then
+                        table.insert(flags, cand)
+                    else
+                        table.insert(subcommands, cand)
+                    end
                 end
             end
 
@@ -130,7 +142,7 @@ function M.generate(binary, completion_file)
 
     local func_name = find_entrypoint(completion_file, binary)
     if not func_name then
-        vim.notify("Could not find completion function in " .. completion_file, vim.log.levels.ERROR)
+        -- vim.notify("Could not find completion function in " .. completion_file, vim.log.levels.ERROR)
         return nil
     end
 

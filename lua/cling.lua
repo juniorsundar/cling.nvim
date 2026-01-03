@@ -102,12 +102,24 @@ local function generate_completion(wrapper, force)
             os.remove(temp_file)
         end
     elseif wrapper.completion_cmd then
-        local handle = io.popen(wrapper.completion_cmd)
-        if handle then
-            local content = handle:read "*a"
-            handle:close()
-            completions = parser.parse(wrapper.binary, content)
+        local temp_file = vim.fn.tempname()
+        vim.fn.system(wrapper.completion_cmd .. " > " .. temp_file)
+
+        local ok, result = pcall(function()
+            return script_crawler.generate(wrapper.binary, temp_file)
+        end)
+
+        if ok and result then
+            completions = result
+        else
+            -- Fallback: read content and parse as help text
+            local content = utils.read_file(temp_file)
+            if content and content ~= "" then
+                completions = parser.parse(wrapper.binary, content)
+            end
         end
+
+        os.remove(temp_file)
     end
 
     if completions then
