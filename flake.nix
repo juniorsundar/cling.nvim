@@ -35,6 +35,7 @@
               pkgs.python3
               pkgs.lua-language-server
               pkgs.stylua
+              pkgs.bash-completion
             ];
 
             shellHook = ''
@@ -51,6 +52,8 @@
 
               uv pip install pre-commit
               pre-commit install
+
+              source ${pkgs.bash-completion}/etc/profile.d/bash_completion.sh
               # zsh
             '';
           };
