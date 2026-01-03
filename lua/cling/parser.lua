@@ -17,13 +17,18 @@ function M.parse_help(content)
     local is_options_section = false
 
     for line in content:gmatch "[^\r\n]+" do
-        if line:match "^%s*[%w%s]*Commands:%s*$" then
+        if line:match "^%s*[%w%s]*Commands:%s*$" or line:match "^%s*[A-Z%s]+COMMANDS%s*$" then
             is_commands_section = true
             is_options_section = false
-        elseif line:match "^%s*[%w%s]*Options:%s*$" or line:match "^%s*[%w%s]*Flags:%s*$" then
+        elseif
+            line:match "^%s*[%w%s]*Options:%s*$"
+            or line:match "^%s*[%w%s]*Flags:%s*$"
+            or line:match "^%s*[A-Z%s]+OPTIONS%s*$"
+            or line:match "^%s*[A-Z%s]+FLAGS%s*$"
+        then
             is_commands_section = false
             is_options_section = true
-        elseif line:match "^%S" then
+        elseif line:match "^%S" and not line:match "^%s*[A-Z%s]+$" then
             is_commands_section = false
             is_options_section = false
         end

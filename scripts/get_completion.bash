@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SCRIPT_FILE="$1"
 FUNC_NAME="$2"
