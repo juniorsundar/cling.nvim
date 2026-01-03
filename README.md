@@ -31,6 +31,13 @@ The plugin can also be configured to wrap CLI commands that you commonly use (li
 > It may not work for all available CLI tools as there is no standard way to implement subcommands and completion functions in Bash.
 > If such as instance is encountered, please raise an Issue ticket.
 
+## Requirements
+
+- Neovim 0.10+
+- `bash-completion`: Many CLI tools' completion scripts depend on this.
+- `bash` *(obviously)*
+- `curl` (optional) for fetching remote completion scripts (Method 4).
+
 ## Installation
 
 Using [lazy.nvim](https://github.com/folke/lazy.nvim):
@@ -40,8 +47,14 @@ return {
     "juniorsundar/cling.nvim",
     config = function()
         require("cling").setup({
-            -- Add your wrappers here (see Configuration below)
-            wrappers = {}
+            wrappers = {
+                {
+                    binary = "jj",
+                    command = "JJ",
+                    completion_cmd = "jj util completion bash",
+                },
+                -- {}, ...
+            }
         })
     end,
 }

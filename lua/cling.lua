@@ -86,7 +86,7 @@ local function generate_completion(wrapper, force)
                 string.format("Fetching completions for %s from %s", wrapper.binary, wrapper.completion_file),
                 vim.log.levels.INFO
             )
-            vim.fn.system({ "curl", "-s", "-o", temp_file, wrapper.completion_file })
+            vim.fn.system { "curl", "-s", "-o", temp_file, wrapper.completion_file }
             file_path = temp_file
         else
             file_path = vim.fn.expand(wrapper.completion_file)
