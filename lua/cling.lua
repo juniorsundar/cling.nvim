@@ -104,10 +104,9 @@ end
 ---
 -- Prompts for an environment file and sets it for the next command.
 function M.with_env()
-    local env_file =
-        vim.fn.input("Path to .env file: ", core.last_env or vim.fs.joinpath(vim.fn.getcwd(), ".env"), "file")
-    if env_file == nil or env_file == "" then
-        vim.notify("Cancelled", vim.log.levels.WARN)
+    local ok, env_file =
+        pcall(vim.fn.input, "Path to .env file: ", core.last_env or vim.fs.joinpath(vim.fn.getcwd(), ".env"), "file")
+    if not ok or not env_file then
         return
     end
     core.last_env = env_file
@@ -130,16 +129,14 @@ end
 function M.on_cli_command(args)
     local fargs = args.fargs
     if #fargs == 0 then
-        local cmd = vim.fn.input("Cling command: ", core.last_cmd or "")
-        if cmd == nil or cmd == "" then
-            vim.notify("Cancelled", vim.log.levels.WARN)
+        local ok, cmd = pcall(vim.fn.input, "Cling command: ", core.last_cmd or "")
+        if not ok or not cmd or cmd == "" then
             return
         end
 
         local default_cwd = core.last_cwd or vim.fn.getcwd()
-        local cwd = vim.fn.input("CWD: ", default_cwd, "dir")
-        if cwd == nil or cwd == "" then
-            vim.notify("Cancelled", vim.log.levels.WARN)
+        local ok, cwd = pcall(vim.fn.input, "CWD: ", default_cwd, "dir")
+        if not ok or not cwd or cwd == "" then
             return
         end
 

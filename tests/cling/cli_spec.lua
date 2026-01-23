@@ -55,7 +55,6 @@ describe("cling cli", function()
 
         cling.on_cli_command { fargs = {} }
 
-        assert.stub(notify_stub).was_called_with("Cancelled", vim.log.levels.WARN)
         assert.stub(executor_stub).was_not_called()
     end)
 
