@@ -62,8 +62,7 @@ end
 --- @param cmd string|nil The command that produced the output.
 --- @param cwd string|nil The working directory of the command.
 local function export_output(buf, cmd, cwd)
-    local ok, filepath =
-        pcall(vim.fn.input, "Export to: ", vim.fn.getcwd() .. "/cling-output.log", "file")
+    local ok, filepath = pcall(vim.fn.input, "Export to: ", vim.fn.getcwd() .. "/cling-output.log", "file")
     if not ok or not filepath or filepath == "" then
         return
     end
@@ -83,7 +82,7 @@ local function export_output(buf, cmd, cwd)
     table.insert(cleaned, "")
     table.insert(cleaned, "-- Command: " .. (cmd or "unknown"))
     table.insert(cleaned, "-- CWD: " .. (cwd or "unknown"))
-    table.insert(cleaned, "-- Timestamp: " .. os.date("!%Y-%m-%dT%H:%M:%SZ"))
+    table.insert(cleaned, "-- Timestamp: " .. os.date "!%Y-%m-%dT%H:%M:%SZ")
     table.insert(cleaned, "-- vim: ft=log")
 
     local content = table.concat(cleaned, "\n") .. "\n"
