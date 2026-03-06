@@ -77,6 +77,7 @@ When a command is executed, the output is displayed in a dedicated terminal-file
 
 *   **`q`**: Closes the Cling window.
 *   **`<CR>` (Enter)**: Smart file navigation. If the cursor is on a file path (common in `grep`, `ls`, or compiler output), pressing Enter will attempt to open that file in the previous window. It supports `file:line:col` formats to jump directly to the specific location.
+*   **`ge`**: Export the terminal output to a file. ANSI escape codes are stripped and metadata (command, CWD, timestamp) is appended as comments.
 
 ### Split Modes
 
@@ -96,6 +97,22 @@ These modifiers work with wrapper commands as well:
 ```vim
 :vert JJ log
 :tab Docker ps
+```
+
+### Exporting Output
+
+You can export the terminal output from any Cling buffer to a file by
+pressing `ge` in normal mode while in the output buffer. The export will:
+
+*   Preserve ANSI color codes in the output (viewable with `cat` or `less -R`)
+*   Prompt you for a file path (defaults to `cling-output.log` in CWD)
+*   Append a metadata footer as vim modeline comments:
+
+```
+-- Command: echo hello
+-- CWD: /home/user/project
+-- Timestamp: 2026-03-06T12:00:00Z
+-- vim: ft=log
 ```
 
 ## Configuration
