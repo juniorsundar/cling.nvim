@@ -1,5 +1,6 @@
 local cling = require "cling"
 local core = require "cling.core"
+local match = require "luassert.match"
 local mock = require "luassert.mock"
 local stub = require "luassert.stub"
 
@@ -13,6 +14,7 @@ describe("cling cli", function()
         core.last_cmd = nil
         core.last_cwd = nil
         core.last_env = nil
+        core.last_smods = nil
 
         executor_stub = stub(core, "executor")
 
@@ -47,7 +49,7 @@ describe("cling cli", function()
 
         cling.on_cli_command { fargs = {} }
 
-        assert.stub(executor_stub).was_called_with("echo test", "/custom/cwd")
+        assert.stub(executor_stub).was_called_with("echo test", "/custom/cwd", match._)
     end)
 
     it("cancels interactive command if input is empty", function()
@@ -60,7 +62,7 @@ describe("cling cli", function()
 
     it("runs command with -- args", function()
         cling.on_cli_command { fargs = { "--", "ls", "-la" } }
-        assert.stub(executor_stub).was_called_with("ls -la", "/default/cwd")
+        assert.stub(executor_stub).was_called_with("ls -la", "/default/cwd", match._)
     end)
 
     it("handles with-env flow", function()
@@ -82,7 +84,7 @@ describe("cling cli", function()
         cling.on_cli_command { fargs = { "with-env" } }
 
         assert.equals(".env.prod", core.last_env)
-        assert.stub(executor_stub).was_called_with("build", "/src")
+        assert.stub(executor_stub).was_called_with("build", "/src", match._)
     end)
 
     it("handles last command", function()
@@ -91,7 +93,7 @@ describe("cling cli", function()
 
         cling.on_cli_command { fargs = { "last" } }
 
-        assert.stub(executor_stub).was_called_with("previous cmd", "/previous/cwd")
+        assert.stub(executor_stub).was_called_with("previous cmd", "/previous/cwd", match._)
     end)
 
     it("warns if no last command", function()
@@ -112,6 +114,70 @@ describe("cling cli", function()
 
         cling.on_cli_command { fargs = {} }
 
-        assert.stub(executor_stub).was_called_with("last_cmd", "/last/cwd")
+        assert.stub(executor_stub).was_called_with("last_cmd", "/last/cwd", match._)
+    end)
+
+    it("forwards smods to executor with -- args", function()
+        local test_smods = { vertical = true, horizontal = false, tab = -1, split = "" }
+        cling.on_cli_command { fargs = { "--", "ls" }, smods = test_smods }
+        local call_args = executor_stub.calls[1]
+        assert.are.same(true, call_args.refs[3].smods.vertical)
+    end)
+
+    it("forwards smods to executor in interactive mode", function()
+        local call_count = 0
+        input_stub.invokes(function(...)
+            call_count = call_count + 1
+            if call_count == 1 then
+                return "echo test"
+            end
+            if call_count == 2 then
+                return "/tmp"
+            end
+            return ""
+        end)
+        local test_smods = { vertical = false, horizontal = false, tab = 0, split = "" }
+        cling.on_cli_command { fargs = {}, smods = test_smods }
+        local call_args = executor_stub.calls[1]
+        assert.are.same(0, call_args.refs[3].smods.tab)
+    end)
+
+    it("forwards smods through with-env flow", function()
+        local call_count = 0
+        input_stub.invokes(function(...)
+            call_count = call_count + 1
+            if call_count == 1 then
+                return ".env.test"
+            end
+            if call_count == 2 then
+                return "build"
+            end
+            if call_count == 3 then
+                return "/src"
+            end
+            return ""
+        end)
+        local test_smods = { vertical = true, horizontal = false, tab = -1, split = "" }
+        cling.on_cli_command { fargs = { "with-env" }, smods = test_smods }
+        local call_args = executor_stub.calls[1]
+        assert.are.same(true, call_args.refs[3].smods.vertical)
+    end)
+
+    it("run_last uses stored last_smods", function()
+        core.last_cmd = "previous cmd"
+        core.last_cwd = "/previous/cwd"
+        core.last_smods = { vertical = true, horizontal = false, tab = -1, split = "" }
+        cling.on_cli_command { fargs = { "last" } }
+        local call_args = executor_stub.calls[1]
+        assert.are.same(true, call_args.refs[3].smods.vertical)
+    end)
+
+    it("run_last passes nil smods when no last_smods stored", function()
+        core.last_cmd = "previous cmd"
+        core.last_cwd = "/previous/cwd"
+        core.last_smods = nil
+        cling.on_cli_command { fargs = { "last" } }
+        local call_args = executor_stub.calls[1]
+        assert.is_nil(call_args.refs[3].smods)
     end)
 end)

@@ -78,6 +78,26 @@ When a command is executed, the output is displayed in a dedicated terminal-file
 *   **`q`**: Closes the Cling window.
 *   **`<CR>` (Enter)**: Smart file navigation. If the cursor is on a file path (common in `grep`, `ls`, or compiler output), pressing Enter will attempt to open that file in the previous window. It supports `file:line:col` formats to jump directly to the specific location.
 
+### Split Modes
+
+The `:Cling` command (and all wrapper commands) respect Neovim's built-in
+command modifiers for controlling split direction:
+
+| Modifier | Result |
+|---|---|
+| `:Cling -- ls` | Bottom horizontal split (default) |
+| `:vert Cling -- ls` | Vertical split |
+| `:tab Cling -- ls` | New tab |
+| `:top Cling -- ls` | Top horizontal split |
+| `:bot Cling -- ls` | Bottom horizontal split (explicit) |
+
+These modifiers work with wrapper commands as well:
+
+```vim
+:vert JJ log
+:tab Docker ps
+```
+
 ## Configuration
 
 You can define custom wrappers for your CLI tools in the `setup` function. Wrappers allow you to create specific Neovim user commands (e.g., `:JJ`, `:Docker`) with autocompletions that can either be derived from the CLI tool itself, or from the completion bash file.

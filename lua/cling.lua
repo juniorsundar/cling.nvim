@@ -103,21 +103,22 @@ end
 
 ---
 -- Prompts for an environment file and sets it for the next command.
-function M.with_env()
+-- @param smods? table Command modifiers forwarded from on_cli_command.
+function M.with_env(smods)
     local ok, env_file =
         pcall(vim.fn.input, "Path to .env file: ", core.last_env or vim.fs.joinpath(vim.fn.getcwd(), ".env"), "file")
     if not ok or not env_file then
         return
     end
     core.last_env = env_file
-    M.on_cli_command { fargs = {} }
+    M.on_cli_command { fargs = {}, smods = smods }
 end
 
 ---
 -- Re-runs the last executed command.
 function M.run_last()
     if core.last_cmd then
-        core.executor(core.last_cmd, core.last_cwd or vim.fn.getcwd())
+        core.executor(core.last_cmd, core.last_cwd or vim.fn.getcwd(), { smods = core.last_smods })
     else
         vim.notify("No previous command executed", vim.log.levels.WARN)
     end
@@ -140,7 +141,7 @@ function M.on_cli_command(args)
             return
         end
 
-        core.executor(cmd, cwd)
+        core.executor(cmd, cwd, { smods = args.smods })
         return
     end
 
@@ -149,10 +150,10 @@ function M.on_cli_command(args)
         for i = 2, #fargs do
             table.insert(cmd_parts, fargs[i])
         end
-        core.executor(table.concat(cmd_parts, " "), vim.fn.getcwd())
+        core.executor(table.concat(cmd_parts, " "), vim.fn.getcwd(), { smods = args.smods })
         return
     elseif fargs[1] == "with-env" then
-        M.with_env()
+        M.with_env(args.smods)
         return
     elseif fargs[1] == "last" then
         M.run_last()
@@ -249,6 +250,7 @@ function M.setup(args)
 
                 core.executor(cmd, vim.fn.getcwd(), {
                     title = "[" .. wrapper.command .. "]",
+                    smods = cargs.smods,
                     on_open = function(buf)
                         if wrapper.keymaps then
                             wrapper.keymaps(buf)

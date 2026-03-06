@@ -1,11 +1,13 @@
 --- @class cling.ExecutorOpts
 --- @field title? string Title for the scratch buffer window.
 --- @field on_open? fun(buf: integer) Callback executed after the scratch window is opened.
+--- @field smods? table Command modifiers from nvim_create_user_command.
 
 --- @class cling.Core
 --- @field last_cmd string|nil Last executed command.
 --- @field last_cwd string|nil Last working directory.
 --- @field last_env string|nil Last environment variables.
+--- @field last_smods table|nil Last command modifiers.
 --- @field cling_window integer|nil Window handle for the output buffer.
 --- @field cling_buffer integer|nil Buffer handle for the output.
 --- @field close_cling_window fun() Closes the compilation window.
@@ -19,10 +21,41 @@ M.last_cmd = nil
 M.last_cwd = nil
 --- @type string|nil
 M.last_env = nil
+--- @type table|nil
+M.last_smods = nil
 --- @type integer|nil
 M.cling_window = nil
 --- @type integer|nil
 M.cling_buffer = nil
+
+--- Builds the vim split command string based on smods.
+--- @param smods table|nil Command modifiers from nvim_create_user_command.
+--- @param escaped_cmd string The fnameescape'd terminal command.
+--- @return string
+local function build_split_cmd(smods, escaped_cmd)
+    if not smods then
+        return "bot split term://" .. escaped_cmd
+    end
+
+    if smods.tab and smods.tab >= 0 then
+        return "tabnew term://" .. escaped_cmd
+    end
+
+    local prefix = ""
+    if smods.split == "topleft" then
+        prefix = "topleft "
+    elseif smods.split == "botright" then
+        prefix = "botright "
+    else
+        prefix = "botright " -- default position
+    end
+
+    if smods.vertical then
+        return prefix .. "vsplit term://" .. escaped_cmd
+    else
+        return prefix .. "split term://" .. escaped_cmd
+    end
+end
 
 --- Closes the active cling output window and resets its handle.
 --- Checks if the buffer and window are valid before attempting to close/delete them.
@@ -56,6 +89,7 @@ function M.executor(cmd, cwd, opts)
     end
     M.last_cmd = cmd
     M.last_cwd = cwd
+    M.last_smods = opts.smods
 
     -- Handle environment variables from .env
     if M.last_env then
@@ -76,7 +110,7 @@ function M.executor(cmd, cwd, opts)
         return
     end
 
-    vim.cmd("bot split term://" .. escaped_cmd)
+    vim.cmd(build_split_cmd(opts.smods, escaped_cmd))
 
     M.cling_buffer = vim.api.nvim_get_current_buf()
     M.cling_window = vim.api.nvim_get_current_win()
