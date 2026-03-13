@@ -131,6 +131,7 @@ You can define custom wrappers for your CLI tools in the `setup` function. Wrapp
 | `completion_file` | `string` | Path or URL to an existing Bash completion script. |
 | `keymaps` | `fun(buf: integer)` | Callback to define buffer-local keymaps for the output buffer. |
 | `close_on_exit` | `boolean` | If `true`, the terminal buffer is automatically wiped when the process exits. Defaults to `false`. |
+| `cwd` | `string\|fun(): string` | Working directory for the command. Can be a static string or a function evaluated at invocation time. Defaults to `vim.fn.getcwd()`. |
 
 > [!TIP]
 >
@@ -312,6 +313,9 @@ require("cling").setup {
             binary = [[sh -c 'f=$(mktemp); yazi --chooser-file="$f"; sel=$(cat "$f"); rm -f "$f"; [ -n "$sel" ] && nvim --server "$NVIM" --remote "$sel"']],
             command = "Yazi",
             close_on_exit = true,
+            cwd = function()
+                return vim.fn.expand "%:p:h"
+            end,
         },
     },
 }

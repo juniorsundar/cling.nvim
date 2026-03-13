@@ -155,7 +155,11 @@ describe("core", function()
             assert.is_not_nil(buf)
 
             local autocmds = vim.api.nvim_get_autocmds { event = "TermClose", buffer = buf }
-            assert.are.same(1, #autocmds, "Exactly one TermClose autocmd should be registered when close_on_exit is true")
+            assert.are.same(
+                1,
+                #autocmds,
+                "Exactly one TermClose autocmd should be registered when close_on_exit is true"
+            )
         end)
 
         it("wipes the buffer after the process exits when close_on_exit is true", function()
@@ -167,7 +171,10 @@ describe("core", function()
                 return not vim.api.nvim_buf_is_valid(buf)
             end, 50)
 
-            assert.is_false(vim.api.nvim_buf_is_valid(buf), "Buffer should be wiped after process exits with close_on_exit=true")
+            assert.is_false(
+                vim.api.nvim_buf_is_valid(buf),
+                "Buffer should be wiped after process exits with close_on_exit=true"
+            )
         end)
 
         it("does NOT wipe the buffer after process exits when close_on_exit is false", function()
@@ -179,7 +186,10 @@ describe("core", function()
                 return not vim.api.nvim_buf_is_valid(buf)
             end, 50)
 
-            assert.is_true(vim.api.nvim_buf_is_valid(buf), "Buffer should persist after process exits when close_on_exit=false")
+            assert.is_true(
+                vim.api.nvim_buf_is_valid(buf),
+                "Buffer should persist after process exits when close_on_exit=false"
+            )
         end)
     end)
 

@@ -248,7 +248,16 @@ function M.setup(args)
                 end
                 local cmd = table.concat(cmd_parts, " ")
 
-                core.executor(cmd, vim.fn.getcwd(), {
+                local resolved_cwd
+                if type(wrapper.cwd) == "function" then
+                    resolved_cwd = wrapper.cwd()
+                elseif type(wrapper.cwd) == "string" then
+                    resolved_cwd = wrapper.cwd
+                else
+                    resolved_cwd = vim.fn.getcwd()
+                end
+
+                core.executor(cmd, resolved_cwd, {
                     title = "[" .. wrapper.command .. "]",
                     smods = cargs.smods,
                     close_on_exit = wrapper.close_on_exit,
