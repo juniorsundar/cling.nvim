@@ -22,7 +22,8 @@ It can be used to quickly execute terminal commands:
 
 The plugin can also be configured to wrap CLI commands that you commonly use (like `jj`, `docker`, etc.) and:
 - automatically generate tab-completions in Neovim,
-- implement custom keymaps for those wrapped CLI output buffers.
+- implement custom keymaps for those wrapped CLI output buffers,
+- automatically close the terminal buffer when the process exits (useful for interactive TUI tools).
 
 > [!NOTE]
 > 
@@ -118,6 +119,24 @@ pressing `ge` in normal mode while in the output buffer. The export will:
 ## Configuration
 
 You can define custom wrappers for your CLI tools in the `setup` function. Wrappers allow you to create specific Neovim user commands (e.g., `:JJ`, `:Docker`) with autocompletions that can either be derived from the CLI tool itself, or from the completion bash file.
+
+### Wrapper Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `binary` | `string` | The binary (or shell command string) to execute. |
+| `command` | `string` | The Neovim user command name to register (e.g. `"Lazygit"`). |
+| `help_cmd` | `string` | Flag passed to the binary to crawl help output for completions. |
+| `completion_cmd` | `string` | Shell command that outputs a Bash completion script. |
+| `completion_file` | `string` | Path or URL to an existing Bash completion script. |
+| `keymaps` | `fun(buf: integer)` | Callback to define buffer-local keymaps for the output buffer. |
+| `close_on_exit` | `boolean` | If `true`, the terminal buffer is automatically wiped when the process exits. Defaults to `false`. |
+
+> [!TIP]
+>
+> `close_on_exit = true` is ideal for **interactive fullscreen TUI tools** (e.g. `lazygit`, `yazi`) whose
+> terminal buffer has no useful output to read after exit. Leave it `false` (the default) for
+> output-producing commands where you want to scroll, search, or export the results afterwards.
 
 ### Completion Generation
 
@@ -252,6 +271,56 @@ return {
 
 </details>
 
+
+### Wrapping TUI tools with `close_on_exit`
+
+For interactive fullscreen TUI tools like `lazygit` or `yazi`, the terminal buffer has no useful content once the tool exits. Setting `close_on_exit = true` wipes the buffer automatically so a Cling buffer doesn't persist with `[Process exited 0]`.
+
+#### Example: `lazygit`
+
+[lazygit](https://github.com/jesseduffield/lazygit) is a terminal UI for git.
+
+```lua
+require("cling").setup {
+    wrappers = {
+        {
+            binary = "lazygit",
+            command = "Lazygit",
+            help_cmd = "--help",
+            close_on_exit = true,
+        },
+    },
+}
+
+vim.keymap.set("n", "<leader>GL", function()
+    vim.cmd "Lazygit"
+    vim.cmd "wincmd T"
+    vim.cmd "startinsert"
+end, { desc = "lazygit" })
+```
+
+#### Example: `yazi`
+
+[yazi](https://github.com/sxyazi/yazi) is a terminal file manager. Because cling runs tools inside a Neovim terminal buffer, naively wrapping `yazi` would cause it to open files in a **nested** Neovim instance rather than the parent one.
+
+The solution is to use `yazi`'s built-in `--chooser-file` flag. Instead of opening files directly, `yazi` writes the selected path to a temp file on exit. A small inline shell script then reads that path and uses `nvim --server "$NVIM" --remote` to instruct the **parent** Neovim instance to open it via RPC. The `$NVIM` socket is automatically exposed by Neovim to all its terminal children.
+
+```lua
+require("cling").setup {
+    wrappers = {
+        {
+            binary = [[sh -c 'f=$(mktemp); yazi --chooser-file="$f"; sel=$(cat "$f"); rm -f "$f"; [ -n "$sel" ] && nvim --server "$NVIM" --remote "$sel"']],
+            command = "Yazi",
+            close_on_exit = true,
+        },
+    },
+}
+
+vim.keymap.set("n", "<leader>o", function()
+    vim.cmd "Yazi"
+    vim.cmd "startinsert"
+end, { desc = "Yazi (File Explorer)" })
+```
 
 ### Different methods of generating tab-completion
 

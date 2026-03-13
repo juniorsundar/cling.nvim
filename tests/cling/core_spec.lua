@@ -130,6 +130,59 @@ describe("core", function()
         end)
     end)
 
+    describe("close_on_exit", function()
+        it("does NOT register a TermClose autocmd when close_on_exit is false", function()
+            core.executor("echo hello", "/tmp", { close_on_exit = false })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            local autocmds = vim.api.nvim_get_autocmds { event = "TermClose", buffer = buf }
+            assert.are.same(0, #autocmds, "No TermClose autocmd should be registered when close_on_exit is false")
+        end)
+
+        it("does NOT register a TermClose autocmd when close_on_exit is omitted", function()
+            core.executor("echo hello", "/tmp")
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            local autocmds = vim.api.nvim_get_autocmds { event = "TermClose", buffer = buf }
+            assert.are.same(0, #autocmds, "No TermClose autocmd should be registered by default")
+        end)
+
+        it("registers a TermClose autocmd when close_on_exit is true", function()
+            core.executor("echo hello", "/tmp", { close_on_exit = true })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            local autocmds = vim.api.nvim_get_autocmds { event = "TermClose", buffer = buf }
+            assert.are.same(1, #autocmds, "Exactly one TermClose autocmd should be registered when close_on_exit is true")
+        end)
+
+        it("wipes the buffer after the process exits when close_on_exit is true", function()
+            core.executor("true", "/tmp", { close_on_exit = true })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            vim.wait(3000, function()
+                return not vim.api.nvim_buf_is_valid(buf)
+            end, 50)
+
+            assert.is_false(vim.api.nvim_buf_is_valid(buf), "Buffer should be wiped after process exits with close_on_exit=true")
+        end)
+
+        it("does NOT wipe the buffer after process exits when close_on_exit is false", function()
+            core.executor("true", "/tmp", { close_on_exit = false })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            vim.wait(3000, function()
+                return not vim.api.nvim_buf_is_valid(buf)
+            end, 50)
+
+            assert.is_true(vim.api.nvim_buf_is_valid(buf), "Buffer should persist after process exits when close_on_exit=false")
+        end)
+    end)
+
     describe("export", function()
         it("registers ge keymap on the output buffer", function()
             core.executor("echo hello", "/tmp")

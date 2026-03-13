@@ -251,6 +251,7 @@ function M.setup(args)
                 core.executor(cmd, vim.fn.getcwd(), {
                     title = "[" .. wrapper.command .. "]",
                     smods = cargs.smods,
+                    close_on_exit = wrapper.close_on_exit,
                     on_open = function(buf)
                         if wrapper.keymaps then
                             wrapper.keymaps(buf)
