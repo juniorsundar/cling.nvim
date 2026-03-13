@@ -92,4 +92,51 @@ describe("cling", function()
             assert.are.same("/default/cwd", call_args.refs[2])
         end)
     end)
+
+    describe("wrapper no_history", function()
+        local executor_stub
+        local getcwd_stub
+
+        before_each(function()
+            executor_stub = stub(core, "executor")
+            getcwd_stub = stub(vim.fn, "getcwd", function()
+                return "/default/cwd"
+            end)
+        end)
+
+        after_each(function()
+            executor_stub:revert()
+            getcwd_stub:revert()
+            pcall(vim.api.nvim_del_user_command, "NoHistoryWrapper")
+            pcall(vim.api.nvim_del_user_command, "HistoryOptInWrapper")
+        end)
+
+        it("passes no_history = true by default for wrapper commands", function()
+            cling.setup {
+                wrappers = {
+                    { binary = "echo", command = "NoHistoryWrapper" },
+                },
+            }
+
+            vim.cmd "NoHistoryWrapper"
+
+            assert.stub(executor_stub).was_called()
+            local call_args = executor_stub.calls[1]
+            assert.is_true(call_args.refs[3].no_history)
+        end)
+
+        it("passes no_history = false when wrapper sets no_history = false", function()
+            cling.setup {
+                wrappers = {
+                    { binary = "echo", command = "HistoryOptInWrapper", no_history = false },
+                },
+            }
+
+            vim.cmd "HistoryOptInWrapper"
+
+            assert.stub(executor_stub).was_called()
+            local call_args = executor_stub.calls[1]
+            assert.is_false(call_args.refs[3].no_history)
+        end)
+    end)
 end)

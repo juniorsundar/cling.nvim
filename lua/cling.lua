@@ -261,6 +261,7 @@ function M.setup(args)
                     title = "[" .. wrapper.command .. "]",
                     smods = cargs.smods,
                     close_on_exit = wrapper.close_on_exit,
+                    no_history = wrapper.no_history ~= false,
                     on_open = function(buf)
                         if wrapper.keymaps then
                             wrapper.keymaps(buf)

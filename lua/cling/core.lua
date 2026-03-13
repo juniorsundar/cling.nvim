@@ -3,6 +3,7 @@
 --- @field on_open? fun(buf: integer) Callback executed after the scratch window is opened.
 --- @field smods? table Command modifiers from nvim_create_user_command.
 --- @field close_on_exit? boolean If true, wipe the buffer automatically when the terminal process exits.
+--- @field no_history? boolean If true, do not update last_cmd/last_cwd/last_smods. Useful for wrapper commands that should not pollute :Cling history.
 
 --- @class cling.Core
 --- @field last_cmd string|nil Last executed command.
@@ -125,9 +126,11 @@ function M.executor(cmd, cwd, opts)
         vim.notify("No command to execute", vim.log.levels.ERROR)
         return
     end
-    M.last_cmd = cmd
-    M.last_cwd = cwd
-    M.last_smods = opts.smods
+    if not opts.no_history then
+        M.last_cmd = cmd
+        M.last_cwd = cwd
+        M.last_smods = opts.smods
+    end
 
     -- Handle environment variables from .env
     if M.last_env then

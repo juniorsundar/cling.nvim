@@ -69,6 +69,22 @@ describe("core", function()
             assert.are.same("ls", core.last_cmd)
             assert.are.same("/var", core.last_cwd)
         end)
+
+        it("does not update last_cmd/last_cwd when no_history is true", function()
+            core.last_cmd = "previous"
+            core.last_cwd = "/previous"
+            core.executor("ls", "/var", { no_history = true })
+            assert.are.same("previous", core.last_cmd)
+            assert.are.same("/previous", core.last_cwd)
+        end)
+
+        it("updates last_cmd/last_cwd when no_history is false", function()
+            core.last_cmd = "previous"
+            core.last_cwd = "/previous"
+            core.executor("ls", "/var", { no_history = false })
+            assert.are.same("ls", core.last_cmd)
+            assert.are.same("/var", core.last_cwd)
+        end)
     end)
 
     describe("close_cling_window", function()

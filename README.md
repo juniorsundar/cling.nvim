@@ -132,6 +132,7 @@ You can define custom wrappers for your CLI tools in the `setup` function. Wrapp
 | `keymaps` | `fun(buf: integer)` | Callback to define buffer-local keymaps for the output buffer. |
 | `close_on_exit` | `boolean` | If `true`, the terminal buffer is automatically wiped when the process exits. Defaults to `false`. |
 | `cwd` | `string\|fun(): string` | Working directory for the command. Can be a static string or a function evaluated at invocation time. Defaults to `vim.fn.getcwd()`. |
+| `no_history` | `boolean` | If `true`, running this wrapper does not update `:Cling`'s last command history. Defaults to `true` for all wrappers - set to `false` to opt a wrapper back into history. |
 
 > [!TIP]
 >
