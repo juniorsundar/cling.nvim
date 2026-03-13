@@ -139,4 +139,76 @@ describe("cling", function()
             assert.is_false(call_args.refs[3].no_history)
         end)
     end)
+
+    describe("wrapper on_close forwarding", function()
+        local executor_stub
+        local getcwd_stub
+
+        before_each(function()
+            executor_stub = stub(core, "executor")
+            getcwd_stub = stub(vim.fn, "getcwd", function()
+                return "/default/cwd"
+            end)
+        end)
+
+        after_each(function()
+            executor_stub:revert()
+            getcwd_stub:revert()
+            pcall(vim.api.nvim_del_user_command, "OnCloseWrapper")
+            pcall(vim.api.nvim_del_user_command, "NoOnCloseWrapper")
+        end)
+
+        it("forwards on_close to executor opts when wrapper defines on_close", function()
+            local my_on_close = function(_buf) end
+            cling.setup {
+                wrappers = {
+                    {
+                        binary = "echo",
+                        command = "OnCloseWrapper",
+                        on_close = my_on_close,
+                    },
+                },
+            }
+
+            vim.cmd "OnCloseWrapper"
+
+            assert.stub(executor_stub).was_called()
+            local call_args = executor_stub.calls[1]
+            assert.are.same(my_on_close, call_args.refs[3].on_close)
+        end)
+
+        it("passes nil on_close to executor opts when wrapper does not define on_close", function()
+            cling.setup {
+                wrappers = {
+                    { binary = "echo", command = "NoOnCloseWrapper" },
+                },
+            }
+
+            vim.cmd "NoOnCloseWrapper"
+
+            assert.stub(executor_stub).was_called()
+            local call_args = executor_stub.calls[1]
+            assert.is_nil(call_args.refs[3].on_close)
+        end)
+
+        it("calls binary function to resolve cmd when wrapper.binary is a function", function()
+            local called = false
+            cling.setup {
+                wrappers = {
+                    {
+                        binary = function()
+                            called = true
+                            return "echo"
+                        end,
+                        command = "OnCloseWrapper",
+                    },
+                },
+            }
+
+            vim.cmd "OnCloseWrapper"
+
+            assert.stub(executor_stub).was_called()
+            assert.is_true(called, "binary function should have been called")
+        end)
+    end)
 end)

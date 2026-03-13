@@ -32,7 +32,9 @@ local function ensure_completion(wrapper, on_complete, force)
         vim.fn.mkdir(cache_dir, "p")
     end
 
-    local cache_file = cache_dir .. "/" .. wrapper.binary .. ".lua"
+    -- When binary is a function, use the command name as the cache key.
+    local binary_name = type(wrapper.binary) == "function" and wrapper.command or wrapper.binary
+    local cache_file = cache_dir .. "/" .. binary_name .. ".lua"
 
     if not force and vim.fn.filereadable(cache_file) == 1 then
         local chunk = loadfile(cache_file)
@@ -68,7 +70,7 @@ local function ensure_completion(wrapper, on_complete, force)
 
     local script_path = plugin_root .. "/lua/cling/jobs/generator.lua"
 
-    vim.notify("Generating completions for " .. wrapper.binary .. " in background...", vim.log.levels.INFO)
+    vim.notify("Generating completions for " .. binary_name .. " in background...", vim.log.levels.INFO)
 
     vim.system({
         "nvim",
@@ -76,7 +78,7 @@ local function ensure_completion(wrapper, on_complete, force)
         script_path,
         plugin_root,
         cache_file,
-        wrapper.binary,
+        binary_name,
         method,
         value,
     }, { text = true }, function(obj)
@@ -85,15 +87,15 @@ local function ensure_completion(wrapper, on_complete, force)
                 local chunk = loadfile(cache_file)
                 if chunk then
                     on_complete(chunk())
-                    vim.notify("Completions for " .. wrapper.binary .. " ready!", vim.log.levels.INFO)
+                    vim.notify("Completions for " .. binary_name .. " ready!", vim.log.levels.INFO)
                 else
-                    vim.notify("Failed to load completions for " .. wrapper.binary, vim.log.levels.ERROR)
+                    vim.notify("Failed to load completions for " .. binary_name, vim.log.levels.ERROR)
                 end
             end)
         else
             vim.schedule(function()
                 vim.notify(
-                    "Failed to generate completions for " .. wrapper.binary .. "\n" .. (obj.stderr or ""),
+                    "Failed to generate completions for " .. binary_name .. "\n" .. (obj.stderr or ""),
                     vim.log.levels.ERROR
                 )
             end)
@@ -178,6 +180,7 @@ function M.setup(args)
     if M.config.wrappers then
         for _, wrapper in ipairs(M.config.wrappers) do
             local completions = { flags = {}, subcommands = {} }
+            local wrapper_binary_name = type(wrapper.binary) == "function" and wrapper.command or wrapper.binary
 
             local function update_completions(new_completions)
                 completions = new_completions
@@ -242,7 +245,8 @@ function M.setup(args)
                     return
                 end
 
-                local cmd_parts = { wrapper.binary }
+                local binary = type(wrapper.binary) == "function" and wrapper.binary() or wrapper.binary
+                local cmd_parts = { binary }
                 for _, arg in ipairs(cargs.fargs) do
                     table.insert(cmd_parts, arg)
                 end
@@ -267,10 +271,11 @@ function M.setup(args)
                             wrapper.keymaps(buf)
                         end
                     end,
+                    on_close = wrapper.on_close,
                 })
             end, {
                 nargs = "*",
-                desc = "Wrapper for " .. wrapper.binary,
+                desc = "Wrapper for " .. wrapper_binary_name,
                 complete = complete_func,
             })
         end

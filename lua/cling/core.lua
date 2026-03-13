@@ -1,6 +1,7 @@
 --- @class cling.ExecutorOpts
 --- @field title? string Title for the scratch buffer window.
 --- @field on_open? fun(buf: integer) Callback executed after the scratch window is opened.
+--- @field on_close? fun(buf: integer) Callback executed after the terminal process closes (TermClose).
 --- @field smods? table Command modifiers from nvim_create_user_command.
 --- @field close_on_exit? boolean If true, wipe the buffer automatically when the terminal process exits.
 --- @field no_history? boolean If true, do not update last_cmd/last_cwd/last_smods. Useful for wrapper commands that should not pollute :Cling history.
@@ -243,14 +244,17 @@ function M.executor(cmd, cwd, opts)
         end,
     })
 
-    if opts.close_on_exit then
+    if opts.close_on_exit or opts.on_close then
         local close_buf = M.cling_buffer
         vim.api.nvim_create_autocmd("TermClose", {
             buffer = close_buf,
             once = true,
             callback = function()
                 vim.schedule(function()
-                    if vim.api.nvim_buf_is_valid(close_buf) then
+                    if opts.on_close then
+                        opts.on_close(close_buf)
+                    end
+                    if opts.close_on_exit and vim.api.nvim_buf_is_valid(close_buf) then
                         vim.api.nvim_buf_delete(close_buf, { force = true })
                     end
                 end)

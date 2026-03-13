@@ -178,6 +178,19 @@ describe("core", function()
             )
         end)
 
+        it("registers a TermClose autocmd when on_close is provided (close_on_exit omitted)", function()
+            core.executor("echo hello", "/tmp", { on_close = function(_buf) end })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            local autocmds = vim.api.nvim_get_autocmds { event = "TermClose", buffer = buf }
+            assert.are.same(
+                1,
+                #autocmds,
+                "Exactly one TermClose autocmd should be registered when on_close is provided"
+            )
+        end)
+
         it("wipes the buffer after the process exits when close_on_exit is true", function()
             core.executor("true", "/tmp", { close_on_exit = true })
             local buf = core.cling_buffer
@@ -206,6 +219,43 @@ describe("core", function()
                 vim.api.nvim_buf_is_valid(buf),
                 "Buffer should persist after process exits when close_on_exit=false"
             )
+        end)
+
+        it("calls on_close with the buffer handle after the process exits", function()
+            local called_with = nil
+            core.executor("true", "/tmp", {
+                close_on_exit = false,
+                on_close = function(buf)
+                    called_with = buf
+                end,
+            })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            vim.wait(3000, function()
+                return called_with ~= nil
+            end, 50)
+
+            assert.are.same(buf, called_with, "on_close should be called with the terminal buffer handle")
+        end)
+
+        it("calls on_close AND wipes buffer when both on_close and close_on_exit are set", function()
+            local called_with = nil
+            core.executor("true", "/tmp", {
+                close_on_exit = true,
+                on_close = function(buf)
+                    called_with = buf
+                end,
+            })
+            local buf = core.cling_buffer
+            assert.is_not_nil(buf)
+
+            vim.wait(3000, function()
+                return called_with ~= nil and not vim.api.nvim_buf_is_valid(buf)
+            end, 50)
+
+            assert.are.same(buf, called_with, "on_close should be called with the terminal buffer handle")
+            assert.is_false(vim.api.nvim_buf_is_valid(buf), "Buffer should be wiped when close_on_exit is true")
         end)
     end)
 
