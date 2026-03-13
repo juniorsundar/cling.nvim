@@ -173,6 +173,15 @@ WRAPPER FIELDS ~
                                                   invocation time.
                                                   Defaults to
                                                   vim.fn.getcwd().
+
+  no_history              boolean                 If true, running this
+                                                  wrapper does not update
+                                                  :Cling’s last command
+                                                  history. Defaults to
+                                                  true for all wrappers -
+                                                  set to false to opt a
+                                                  wrapper back into
+                                                  history.
   -----------------------------------------------------------------------
 
   [!TIP]
