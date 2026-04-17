@@ -1,4 +1,5 @@
-*cling.nvim.txt*        For Neovim >= 0.10.0        Last change: 2026 April 11
+*cling.nvim.txt*
+                            For Neovim >= 0.10.0    Last change: 2026 April 17
 
 ==============================================================================
 Table of Contents                               *cling.nvim-table-of-contents*
@@ -131,6 +132,22 @@ Wrappers allow you to create specific Neovim user commands (e.g., `:JJ`,
 itself, or from the completion bash file.
 
 
+SETUP OPTIONS ~
+
+  ---------------------------------------------------------------------------------
+  Option                  Type                    Description
+  ----------------------- ----------------------- ---------------------------------
+  separate_history        boolean                 Enable per-CWD command history.
+                                                  When true (default), commands are
+                                                  grouped by working directory and
+                                                  persisted to
+                                                  stdpath("data")/cling/history/.
+                                                  When false, uses Neovim’s native
+                                                  input history for the command
+                                                  prompt.
+
+  ---------------------------------------------------------------------------------
+
 WRAPPER FIELDS ~
 
   -----------------------------------------------------------------------
@@ -185,10 +202,10 @@ WRAPPER FIELDS ~
   -----------------------------------------------------------------------
 
   [!TIP]
-  `close_on_exit = true` is ideal for **interactive fullscreen TUI tools**
-  (e.g. `lazygit`, `yazi`) whose terminal buffer has no useful output to read
-  after exit. Leave it `false` (the default) for output-producing commands where
-  you want to scroll, search, or export the results afterwards.
+  `close_on_exit = true` is ideal for **interactive fullscreen TUI tools** (e.g.
+  `lazygit`, `yazi`) whose terminal buffer has no useful output to read after
+  exit. Leave it `false` (the default) for output-producing commands where you
+  want to scroll, search, or export the results afterwards.
 
 COMPLETION GENERATION ~
 
@@ -415,7 +432,7 @@ Generating tab-completions can be achieved through following 4 methods:
             command = "Docker",
             help_cmd = "--help",
         },
-      
+    
         -- Method 2: Completion Command
         {
             binary = "jj",
