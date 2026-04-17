@@ -1,5 +1,6 @@
 local cling = require "cling"
 local core = require "cling.core"
+local history = require "cling.history"
 local match = require "luassert.match"
 local mock = require "luassert.mock"
 local stub = require "luassert.stub"
@@ -179,5 +180,70 @@ describe("cling cli", function()
         cling.on_cli_command { fargs = { "last" } }
         local call_args = executor_stub.calls[1]
         assert.is_nil(call_args.refs[3].smods)
+    end)
+
+    describe("separate_history config flag", function()
+        before_each(function()
+            history.clear "/default/cwd"
+            history.clear "/custom/cwd"
+        end)
+
+        after_each(function()
+            cling.config.separate_history = true
+            history.clear "/default/cwd"
+            history.clear "/custom/cwd"
+        end)
+
+        it("passes no_cwd_history=false to executor when separate_history is true (default)", function()
+            cling.config.separate_history = true
+            local call_count = 0
+            input_stub.invokes(function()
+                call_count = call_count + 1
+                if call_count == 1 then
+                    return "echo hi"
+                end
+                return "/custom/cwd"
+            end)
+
+            cling.on_cli_command { fargs = {} }
+
+            local call_args = executor_stub.calls[1]
+            assert.is_false(
+                call_args.refs[3].no_cwd_history,
+                "no_cwd_history should be false when separate_history=true"
+            )
+        end)
+
+        it("passes no_cwd_history=true to executor when separate_history is false", function()
+            cling.config.separate_history = false
+            local call_count = 0
+            input_stub.invokes(function()
+                call_count = call_count + 1
+                if call_count == 1 then
+                    return "echo hi"
+                end
+                return "/custom/cwd"
+            end)
+
+            cling.on_cli_command { fargs = {} }
+
+            local call_args = executor_stub.calls[1]
+            assert.is_true(
+                call_args.refs[3].no_cwd_history,
+                "no_cwd_history should be true when separate_history=false"
+            )
+        end)
+
+        it("setup() with separate_history=false sets config correctly", function()
+            cling.setup { separate_history = false }
+            assert.is_false(cling.config.separate_history)
+            -- Restore
+            cling.setup { separate_history = true }
+        end)
+
+        it("setup() defaults separate_history to true when not specified", function()
+            cling.setup {}
+            assert.is_true(cling.config.separate_history)
+        end)
     end)
 end)

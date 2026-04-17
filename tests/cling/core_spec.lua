@@ -1,4 +1,5 @@
 local core = require "cling.core"
+local history = require "cling.history"
 
 describe("core", function()
     before_each(function()
@@ -18,6 +19,10 @@ describe("core", function()
         core.last_cmd = nil
         core.last_cwd = nil
         core.last_smods = nil
+
+        history.clear "/tmp"
+        history.clear "/var"
+        history.clear "/previous"
 
         while vim.fn.tabpagenr "$" > 1 do
             vim.cmd "tabclose $"
@@ -40,7 +45,6 @@ describe("core", function()
             assert.is_not_nil(core.cling_window)
             assert.is_not_nil(core.cling_buffer)
 
-            -- Restore
             vim.fn.getcwd = original_getcwd
         end)
 

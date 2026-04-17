@@ -16,7 +16,7 @@
 `cling.nvim` implements a customisable and thin CLI wrapper around executable binaries in Neovim.
 
 It can be used to quickly execute terminal commands:
-- without leaving the Neovim context via multiplexing or `Ctrl+z`, 
+- without leaving the Neovim context via multiplexing or `Ctrl+z`,
 - without losing the text formatting of the command outputs,
 - and also to interact with the output of those commands as a text-buffer.
 
@@ -26,9 +26,9 @@ The plugin can also be configured to wrap CLI commands that you commonly use (li
 - automatically close the terminal buffer when the process exits (useful for interactive TUI tools).
 
 > [!NOTE]
-> 
+>
 > Autogenerating tab-completions in Neovim is an experimental feature.
-> 
+>
 > It may not work for all available CLI tools as there is no standard way to implement subcommands and completion functions in Bash.
 > If such as instance is encountered, please raise an Issue ticket.
 
@@ -119,6 +119,12 @@ pressing `ge` in normal mode while in the output buffer. The export will:
 ## Configuration
 
 You can define custom wrappers for your CLI tools in the `setup` function. Wrappers allow you to create specific Neovim user commands (e.g., `:JJ`, `:Docker`) with autocompletions that can either be derived from the CLI tool itself, or from the completion bash file.
+
+### Setup Options
+
+| Option | Type | Description |
+|---|---|---|
+| `separate_history` | `boolean` | Enable per-CWD command history. When `true` (default), commands are grouped by working directory and persisted to `stdpath("data")/cling/history/`. When `false`, uses Neovim's native input history for the command prompt. |
 
 ### Wrapper Fields
 
@@ -339,7 +345,7 @@ wrappers = {
         command = "Docker",
         help_cmd = "--help",
     },
-  
+
     -- Method 2: Completion Command
     {
         binary = "jj",

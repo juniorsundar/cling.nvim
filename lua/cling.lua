@@ -1,17 +1,17 @@
 local core = require "cling.core"
-local utils = require "cling.utils"
+local history = require "cling.history"
 
----
--- @class cling.Config
+--- @class cling.Config
 --- @field wrappers? cling.Wrapper[] List of wrappers to configure during setup.
+--- @field separate_history? boolean If false, disable per-CWD history separation and use Neovim's native input history. Defaults to true.
 local config = {
     wrappers = {},
+    separate_history = true,
 }
 
 local M = {}
 
----
--- @type cling.Config
+--- @type cling.Config
 M.config = config
 
 local function get_plugin_root()
@@ -19,20 +19,18 @@ local function get_plugin_root()
     return str:match "(.*)/lua/cling%.lua$"
 end
 
+--- Generates or retrieves cached completion data for a wrapper.
+--- Fetches from URL or executes command if necessary, then parses and caches the result.
 ---
--- Generates or retrieves cached completion data for a wrapper.
--- Fetches from URL or executes command if necessary, then parses and caches the result.
---
--- @param wrapper cling.Wrapper The wrapper configuration.
--- @param on_complete fun(completions: cling.CommandNode) Callback when completions are available.
--- @param force? boolean If true, forces regeneration of the completion cache.
+--- @param wrapper cling.Wrapper The wrapper configuration.
+--- @param on_complete fun(completions: cling.CommandNode) Callback when completions are available.
+--- @param force? boolean If true, forces regeneration of the completion cache.
 local function ensure_completion(wrapper, on_complete, force)
     local cache_dir = vim.fn.stdpath "data" .. "/cling/completions"
     if vim.fn.isdirectory(cache_dir) == 0 then
         vim.fn.mkdir(cache_dir, "p")
     end
 
-    -- When binary is a function, use the command name as the cache key.
     local binary_name = type(wrapper.binary) == "function" and wrapper.command or wrapper.binary
     local cache_file = cache_dir .. "/" .. binary_name .. ".lua"
 
@@ -103,9 +101,8 @@ local function ensure_completion(wrapper, on_complete, force)
     end)
 end
 
----
--- Prompts for an environment file and sets it for the next command.
--- @param smods? table Command modifiers forwarded from on_cli_command.
+--- Prompts for an environment file and sets it for the next command.
+--- @param smods? table Command modifiers forwarded from on_cli_command.
 function M.with_env(smods)
     local ok, env_file =
         pcall(vim.fn.input, "Path to .env file: ", core.last_env or vim.fs.joinpath(vim.fn.getcwd(), ".env"), "file")
@@ -116,8 +113,7 @@ function M.with_env(smods)
     M.on_cli_command { fargs = {}, smods = smods }
 end
 
----
--- Re-runs the last executed command.
+--- Re-runs the last executed command.
 function M.run_last()
     if core.last_cmd then
         core.executor(core.last_cmd, core.last_cwd or vim.fn.getcwd(), { smods = core.last_smods })
@@ -126,24 +122,35 @@ function M.run_last()
     end
 end
 
----
--- Handles the generic Cling command execution.
--- @param args table Command arguments (fargs).
+--- Handles the generic Cling command execution.
+--- @param args table Command arguments (fargs).
 function M.on_cli_command(args)
     local fargs = args.fargs
     if #fargs == 0 then
+        local prompt_cwd = core.last_cwd or vim.fn.getcwd()
+
+        if M.config.separate_history ~= false then
+            history.load(prompt_cwd)
+            vim.fn.inputsave()
+            vim.fn.histdel "input"
+            for _, entry in ipairs(history.get(prompt_cwd)) do
+                vim.fn.histadd("input", entry)
+            end
+        end
+
         local ok, cmd = pcall(vim.fn.input, "Cling command: ", core.last_cmd or "")
+        vim.fn.inputrestore()
+
         if not ok or not cmd or cmd == "" then
             return
         end
 
-        local default_cwd = core.last_cwd or vim.fn.getcwd()
-        local ok, cwd = pcall(vim.fn.input, "CWD: ", default_cwd, "dir")
-        if not ok or not cwd or cwd == "" then
+        local ok2, cwd = pcall(vim.fn.input, "CWD: ", prompt_cwd, "dir")
+        if not ok2 or not cwd or cwd == "" then
             return
         end
 
-        core.executor(cmd, cwd, { smods = args.smods })
+        core.executor(cmd, cwd, { smods = args.smods, no_cwd_history = M.config.separate_history == false })
         return
     end
 
@@ -169,11 +176,10 @@ function M.on_cli_command(args)
     end
 end
 
+--- Sets up the cling plugin with the provided options.
+--- Configures wrappers.
 ---
--- Sets up the cling plugin with the provided options.
--- Configures wrappers.
---
--- @param args? cling.Config Configuration options.
+--- @param args? cling.Config Configuration options.
 function M.setup(args)
     M.config = vim.tbl_deep_extend("force", M.config, args or {})
 
@@ -190,7 +196,7 @@ function M.setup(args)
 
             local complete_func = function(arglead, cmdline, _)
                 local args = vim.split(cmdline, "%s+")
-                table.remove(args, 1) -- remove command name
+                table.remove(args, 1)
 
                 local current_node = completions
 

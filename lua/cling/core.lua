@@ -5,6 +5,7 @@
 --- @field smods? table Command modifiers from nvim_create_user_command.
 --- @field close_on_exit? boolean If true, wipe the buffer automatically when the terminal process exits.
 --- @field no_history? boolean If true, do not update last_cmd/last_cwd/last_smods. Useful for wrapper commands that should not pollute :Cling history.
+--- @field no_cwd_history? boolean If true, skip per-CWD history recording (history.add/save). Set when separate_history is disabled in config.
 
 --- @class cling.Core
 --- @field last_cmd string|nil Last executed command.
@@ -15,6 +16,8 @@
 --- @field cling_buffer integer|nil Buffer handle for the output.
 --- @field close_cling_window fun() Closes the compilation window.
 --- @field executor fun(cmd: string, cwd: string, opts?: cling.ExecutorOpts) Executes a command.
+
+local history = require "cling.history"
 
 local M = {} --- @class cling.Core
 
@@ -131,6 +134,10 @@ function M.executor(cmd, cwd, opts)
         M.last_cmd = cmd
         M.last_cwd = cwd
         M.last_smods = opts.smods
+        if not opts.no_cwd_history then
+            history.add(cwd, cmd)
+            history.save(cwd)
+        end
     end
 
     -- Handle environment variables from .env
