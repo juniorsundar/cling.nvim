@@ -105,7 +105,6 @@ These modifiers work with wrapper commands as well:
 You can export the terminal output from any Cling buffer to a file by
 pressing `ge` in normal mode while in the output buffer. The export will:
 
-*   Preserve ANSI color codes in the output (viewable with `cat` or `less -R`)
 *   Prompt you for a file path (defaults to `cling-output.log` in CWD)
 *   Append a metadata footer as vim modeline comments:
 

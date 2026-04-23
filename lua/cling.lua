@@ -138,7 +138,11 @@ function M.on_cli_command(args)
             end
         end
 
+        vim.keymap.set("c", "<C-l>", "<C-u>", { noremap = true })
+        vim.keymap.set("c", "<M-BS>", "<C-w>", { noremap = true })
         local ok, cmd = pcall(vim.fn.input, "Cling command: ", core.last_cmd or "")
+        vim.keymap.del("c", "<C-l>")
+        vim.keymap.del("c", "<M-BS>")
         vim.fn.inputrestore()
 
         if not ok or not cmd or cmd == "" then
