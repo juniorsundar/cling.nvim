@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.5.0](https://github.com/juniorsundar/cling.nvim/compare/v0.4.0...v0.5.0) (2026-04-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **history:** Separate history by working directory (opt-out in config)
+
+### chore
+
+* release 0.5.0 ([af1c0df](https://github.com/juniorsundar/cling.nvim/commit/af1c0dfabcc757b93a0775e0ef2bee6a30928859))
+
+
+### Features
+
+* `no_history` for wrapped CLI commands ([84ea666](https://github.com/juniorsundar/cling.nvim/commit/84ea6661e0474960e6ba9d6ed0c2590fb355f059))
+* **cling:** &lt;C-l&gt; Keymap for clearing input ([59773f3](https://github.com/juniorsundar/cling.nvim/commit/59773f3a314eac49234d649ed554ff043a91d6a7))
+* **history:** Separate history by working directory (opt-out in config) ([acf125d](https://github.com/juniorsundar/cling.nvim/commit/acf125d417475943c287d52d9844bfa2cd2ed846))
+* Implement `on_close` hook ([be70404](https://github.com/juniorsundar/cling.nvim/commit/be704047de41d05bd312bc6f7dfbf7f8da487b6a))
+* Set `cwd` for wrapped CLI commands ([6d74f0b](https://github.com/juniorsundar/cling.nvim/commit/6d74f0b8b841777e7cd56d58b16d800e475d4a88))
+
+
+### Bug Fixes
+
+* **ci:** handle SIGHUP crash on Windows nightly in test runner ([d9339b8](https://github.com/juniorsundar/cling.nvim/commit/d9339b8c4cdf07d69f95ef4ba40da49d64a533b7))
+
 ## [0.4.0](https://github.com/juniorsundar/cling.nvim/compare/v0.3.0...v0.4.0) (2026-03-13)
 
 
