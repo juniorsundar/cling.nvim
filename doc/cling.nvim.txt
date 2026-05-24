@@ -1,5 +1,5 @@
 *cling.nvim.txt*
-                            For Neovim >= 0.10.0    Last change: 2026 April 25
+                              For Neovim >= 0.10.0    Last change: 2026 May 24
 
 ==============================================================================
 Table of Contents                               *cling.nvim-table-of-contents*
