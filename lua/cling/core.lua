@@ -63,6 +63,14 @@ local function build_split_cmd(smods, escaped_cmd)
     end
 end
 
+--- Clears inherited editor columns from the terminal output window.
+--- @param winid integer Window handle for the Cling output window.
+local function configure_cling_window(winid)
+    vim.wo[winid].signcolumn = "no"
+    vim.wo[winid].foldcolumn = "0"
+    vim.wo[winid].statuscolumn = ""
+end
+
 --- Exports the terminal buffer output to a file, appending a metadata footer.
 --- @param buf integer Buffer handle for the output.
 --- @param cmd string|nil The command that produced the output.
@@ -163,6 +171,7 @@ function M.executor(cmd, cwd, opts)
 
     M.cling_buffer = vim.api.nvim_get_current_buf()
     M.cling_window = vim.api.nvim_get_current_win()
+    configure_cling_window(M.cling_window)
     vim.api.nvim_buf_set_name(M.cling_buffer, opts.title or "[Cling]")
 
     vim.api.nvim_buf_set_keymap(M.cling_buffer, "n", "q", "", {

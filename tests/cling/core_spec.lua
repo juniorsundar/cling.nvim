@@ -48,6 +48,26 @@ describe("core", function()
             vim.fn.getcwd = original_getcwd
         end)
 
+        it("clears inherited statuscolumn padding in the terminal window", function()
+            local saved_sc = vim.wo.signcolumn
+            local saved_fc = vim.wo.foldcolumn
+            local saved_scol = vim.wo.statuscolumn
+
+            vim.wo.signcolumn = "yes"
+            vim.wo.foldcolumn = "1"
+            vim.wo.statuscolumn = "%l  "
+
+            core.executor("echo hello", "/tmp")
+
+            assert.are.same("", vim.wo[core.cling_window].statuscolumn)
+            assert.are.same("no", vim.wo[core.cling_window].signcolumn)
+            assert.are.same("0", vim.wo[core.cling_window].foldcolumn)
+
+            vim.wo.signcolumn = saved_sc
+            vim.wo.foldcolumn = saved_fc
+            vim.wo.statuscolumn = saved_scol
+        end)
+
         it("closes existing window before opening new one", function()
             core.executor("echo 1", "/tmp")
             local win1 = core.cling_window
