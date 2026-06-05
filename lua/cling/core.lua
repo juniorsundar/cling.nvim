@@ -17,6 +17,14 @@
 --- @field close_cling_window fun() Closes the compilation window.
 --- @field executor fun(cmd: string, cwd: string, opts?: cling.ExecutorOpts) Executes a command.
 
+-- Module-level state for column capture/restore
+--- @type table<string,string>|nil
+local _captured_columns = nil
+--- @type integer|nil
+local _winnew_autocmd_id = nil
+--- @type table<integer,boolean>
+local _cling_windows = {}
+
 local history = require "cling.history"
 
 local M = {} --- @class cling.Core
@@ -64,11 +72,42 @@ local function build_split_cmd(smods, escaped_cmd)
 end
 
 --- Clears inherited editor columns from the terminal output window.
+--- Captures the user's effective column settings once on the first cling window open.
 --- @param winid integer Window handle for the Cling output window.
-local function configure_cling_window(winid)
+--- @param original_win integer Window handle for the user's original window (before terminal split).
+local function configure_cling_window(winid, original_win)
+    -- Capture user's column settings once from the original window (before the terminal split)
+    if not _captured_columns and original_win and vim.api.nvim_win_is_valid(original_win) then
+        _captured_columns = {
+            signcolumn = vim.wo[original_win].signcolumn,
+            foldcolumn = vim.wo[original_win].foldcolumn,
+            statuscolumn = vim.wo[original_win].statuscolumn,
+        }
+    end
+
     vim.wo[winid].signcolumn = "no"
     vim.wo[winid].foldcolumn = "0"
     vim.wo[winid].statuscolumn = ""
+
+    -- Create WinNew autocommand once to restore columns on non-cling windows
+    if not _winnew_autocmd_id then
+        _winnew_autocmd_id = vim.api.nvim_create_autocmd("WinNew", {
+            group = vim.api.nvim_create_augroup("cling_column_restore", { clear = true }),
+            callback = function()
+                if _captured_columns then
+                    local new_win = vim.api.nvim_get_current_win()
+                    if not _cling_windows[new_win] then
+                        vim.wo[new_win].signcolumn = _captured_columns.signcolumn
+                        vim.wo[new_win].foldcolumn = _captured_columns.foldcolumn
+                        vim.wo[new_win].statuscolumn = _captured_columns.statuscolumn
+                    end
+                end
+            end,
+        })
+    end
+
+    -- Track this cling window so the WinNew callback skips it
+    _cling_windows[winid] = true
 end
 
 --- Exports the terminal buffer output to a file, appending a metadata footer.
@@ -108,16 +147,38 @@ local function export_output(buf, cmd, cwd)
     end
 end
 
+--- Removes a window from cling tracking. When no cling windows remain,
+--- deletes the WinNew autocommand and clears captured columns.
+--- @param winid integer
+local function _untrack_window(winid)
+    _cling_windows[winid] = nil
+    if vim.tbl_isempty(_cling_windows) then
+        _captured_columns = nil
+        if _winnew_autocmd_id then
+            pcall(vim.api.nvim_del_autocmd, _winnew_autocmd_id)
+            _winnew_autocmd_id = nil
+        end
+    end
+end
+
 --- Closes the active cling output window and resets its handle.
 --- Checks if the buffer and window are valid before attempting to close/delete them.
 function M.close_cling_window()
-    if M.cling_buffer and vim.api.nvim_buf_is_valid(M.cling_buffer) then
-        vim.api.nvim_buf_delete(M.cling_buffer, { force = true })
+    local win = M.cling_window
+    local buf = M.cling_buffer
+    local buf_is_valid = buf and vim.api.nvim_buf_is_valid(buf)
+
+    if buf_is_valid then
+        -- BufWipeout autocmd handles _untrack_window synchronously
+        vim.api.nvim_buf_delete(buf, { force = true })
     end
     M.cling_buffer = nil
 
-    if M.cling_window and vim.api.nvim_win_is_valid(M.cling_window) then
-        vim.api.nvim_win_close(M.cling_window, true)
+    if win and vim.api.nvim_win_is_valid(win) then
+        if not buf_is_valid then
+            _untrack_window(win)
+        end
+        vim.api.nvim_win_close(win, true)
     end
     M.cling_window = nil
 end
@@ -171,7 +232,7 @@ function M.executor(cmd, cwd, opts)
 
     M.cling_buffer = vim.api.nvim_get_current_buf()
     M.cling_window = vim.api.nvim_get_current_win()
-    configure_cling_window(M.cling_window)
+    configure_cling_window(M.cling_window, original_window)
     vim.api.nvim_buf_set_name(M.cling_buffer, opts.title or "[Cling]")
 
     vim.api.nvim_buf_set_keymap(M.cling_buffer, "n", "q", "", {
@@ -256,6 +317,10 @@ function M.executor(cmd, cwd, opts)
         buffer = M.cling_buffer,
         once = true,
         callback = function()
+            local win = M.cling_window
+            if win then
+                _untrack_window(win)
+            end
             M.cling_window = nil
         end,
     })
@@ -277,6 +342,23 @@ function M.executor(cmd, cwd, opts)
             end,
         })
     end
+end
+
+--- Resets column capture and WinNew autocommand state (for test cleanup).
+function M._reset_column_capture()
+    _captured_columns = nil
+    _cling_windows = {}
+    if _winnew_autocmd_id then
+        pcall(vim.api.nvim_del_autocmd, _winnew_autocmd_id)
+        _winnew_autocmd_id = nil
+    end
+end
+
+--- Adds a window to the cling tracking set (for test use only).
+--- Needed to test multi-window teardown behavior without changing the public executor() API.
+--- @param winid integer Window handle to track as a cling window.
+function M._track_window(winid)
+    _cling_windows[winid] = true
 end
 
 return M
