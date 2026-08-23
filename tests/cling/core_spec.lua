@@ -619,6 +619,21 @@ describe("core", function()
         end)
     end)
 
+    describe("jump", function()
+        it("registers <CR> keymap on the output buffer", function()
+            core.executor("echo hello", "/tmp")
+            local keymaps = vim.api.nvim_buf_get_keymap(core.cling_buffer, "n")
+            local found_cr = false
+            for _, km in ipairs(keymaps) do
+                if km.lhs == "<CR>" then
+                    found_cr = true
+                    break
+                end
+            end
+            assert.is_true(found_cr, "<CR> keymap should be registered on the buffer")
+        end)
+    end)
+
     describe("export", function()
         it("registers ge keymap on the output buffer", function()
             core.executor("echo hello", "/tmp")
@@ -631,119 +646,6 @@ describe("core", function()
                 end
             end
             assert.is_true(found_ge, "ge keymap should be registered on the buffer")
-        end)
-
-        it("exports buffer content to file with metadata", function()
-            core.executor("echo test_export", "/tmp")
-
-            local original_input = vim.fn.input
-            vim.fn.input = function(...)
-                return "/tmp/cling_test_export.log"
-            end
-
-            local keymaps = vim.api.nvim_buf_get_keymap(core.cling_buffer, "n")
-            local ge_callback = nil
-            for _, km in ipairs(keymaps) do
-                if km.lhs == "ge" then
-                    ge_callback = km.callback
-                    break
-                end
-            end
-
-            assert.is_not_nil(ge_callback, "ge callback should exist")
-            ge_callback()
-
-            vim.fn.input = original_input
-
-            local lines = vim.fn.readfile "/tmp/cling_test_export.log"
-            assert.is_not_nil(lines, "exported file should exist")
-
-            local found_cmd = false
-            local found_cwd = false
-            local found_ts = false
-            local found_vim = false
-
-            for _, line in ipairs(lines) do
-                if line:match "^-- Command: echo test_export" then
-                    found_cmd = true
-                end
-                if line:match "^-- CWD: /tmp" then
-                    found_cwd = true
-                end
-                if line:match "^-- Timestamp: " then
-                    found_ts = true
-                end
-                if line:match "^-- vim: ft=log$" then
-                    found_vim = true
-                end
-            end
-
-            assert.is_true(found_cmd, "metadata should contain Command line")
-            assert.is_true(found_cwd, "metadata should contain CWD line")
-            assert.is_true(found_ts, "metadata should contain Timestamp line")
-            assert.is_true(found_vim, "metadata should contain vim modeline")
-
-            os.remove "/tmp/cling_test_export.log"
-        end)
-
-        it("export preserves ANSI escape codes", function()
-            core.executor("echo hello", "/tmp")
-
-            vim.bo[core.cling_buffer].modifiable = true
-            vim.api.nvim_buf_set_lines(core.cling_buffer, 0, -1, false, {
-                "\27[31mred text\27[0m",
-                "\27[1;32mbold green\27[0m",
-                "plain line",
-            })
-
-            local original_input = vim.fn.input
-            vim.fn.input = function(...)
-                return "/tmp/cling_test_ansi.log"
-            end
-
-            local keymaps = vim.api.nvim_buf_get_keymap(core.cling_buffer, "n")
-            local ge_callback = nil
-            for _, km in ipairs(keymaps) do
-                if km.lhs == "ge" then
-                    ge_callback = km.callback
-                    break
-                end
-            end
-
-            assert.is_not_nil(ge_callback, "ge callback should exist")
-            ge_callback()
-
-            vim.fn.input = original_input
-
-            local lines = vim.fn.readfile "/tmp/cling_test_ansi.log"
-            assert.is_not_nil(lines, "exported file should exist")
-
-            local found_red = false
-            local found_green = false
-            local found_plain = false
-            local found_ansi = false
-
-            for _, line in ipairs(lines) do
-                if line:match "red text" then
-                    found_red = true
-                end
-                if line:match "bold green" then
-                    found_green = true
-                end
-                if line:match "^plain line$" then
-                    found_plain = true
-                end
-                if line:match "\27%[" then
-                    found_ansi = true
-                end
-            end
-
-            assert.is_true(found_red, "output should contain 'red text'")
-            assert.is_true(found_green, "output should contain 'bold green'")
-            assert.is_true(found_plain, "output should contain 'plain line'")
-            assert.is_true(found_ansi, "output should contain raw ANSI escape sequences")
-
-            os.remove "/tmp/cling_test_ansi.log"
         end)
 
         it("export cancels when input is empty", function()

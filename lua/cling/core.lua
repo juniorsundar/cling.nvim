@@ -26,6 +26,7 @@ local _winnew_autocmd_id = nil
 local _cling_windows = {}
 
 local history = require "cling.history"
+local navigation = require "cling.navigation"
 
 local M = {} --- @class cling.Core
 
@@ -108,43 +109,6 @@ local function configure_cling_window(winid, original_win)
 
     -- Track this cling window so the WinNew callback skips it
     _cling_windows[winid] = true
-end
-
---- Exports the terminal buffer output to a file, appending a metadata footer.
---- @param buf integer Buffer handle for the output.
---- @param cmd string|nil The command that produced the output.
---- @param cwd string|nil The working directory of the command.
-local function export_output(buf, cmd, cwd)
-    local ok, filepath = pcall(vim.fn.input, "Export to: ", vim.fn.getcwd() .. "/cling-output.log", "file")
-    if not ok or not filepath or filepath == "" then
-        return
-    end
-
-    local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-    local cleaned = {}
-    for _, line in ipairs(lines) do
-        table.insert(cleaned, line)
-    end
-
-    -- Remove trailing empty lines
-    while #cleaned > 0 and cleaned[#cleaned] == "" do
-        table.remove(cleaned)
-    end
-
-    -- Append metadata footer
-    table.insert(cleaned, "")
-    table.insert(cleaned, "-- Command: " .. (cmd or "unknown"))
-    table.insert(cleaned, "-- CWD: " .. (cwd or "unknown"))
-    table.insert(cleaned, "-- Timestamp: " .. os.date "!%Y-%m-%dT%H:%M:%SZ")
-    table.insert(cleaned, "-- vim: ft=log")
-
-    local content = table.concat(cleaned, "\n") .. "\n"
-    local fs = require "cling.fs"
-    if fs.write_file(filepath, content) then
-        vim.notify("Output exported to " .. filepath, vim.log.levels.INFO)
-    else
-        vim.notify("Failed to export to " .. filepath, vim.log.levels.ERROR)
-    end
 end
 
 --- Removes a window from cling tracking. When no cling windows remain,
@@ -247,54 +211,7 @@ function M.executor(cmd, cwd, opts)
         callback = function()
             local line = vim.api.nvim_get_current_line()
             local cfile = vim.fn.expand "<cfile>"
-            local start_idx = line:find(cfile, 1, true)
-            if not start_idx then
-                print "Path not found on current line"
-                return
-            end
-            local trimmed_line = line:sub(start_idx)
-
-            local original_qf_state = vim.fn.getqflist { all = 0 }
-            local original_efm = vim.go.errorformat
-
-            local temp_efm = table.concat({
-                "%f:%l:%c:%m",
-                "%f:%l:%c",
-                "%f:%l",
-            }, ",")
-            vim.go.errorformat = temp_efm .. "," .. original_efm
-            vim.fn.setqflist({}, "r", { lines = { trimmed_line } })
-            local qf_items = vim.fn.getqflist()
-
-            vim.go.errorformat = original_efm
-            vim.fn.setqflist({}, "r", {
-                items = original_qf_state.items,
-                title = original_qf_state.title,
-            })
-
-            local lnum = qf_items[1].lnum
-            local col = qf_items[1].col
-
-            local full_path = vim.fs.normalize(vim.fs.joinpath(actual_cwd, cfile))
-            if not vim.uv.fs_stat(full_path) and vim.uv.fs_stat(cfile) then
-                full_path = vim.fs.normalize(cfile)
-            end
-            if not vim.uv.fs_stat(full_path) then
-                return nil
-            end
-
-            if not vim.api.nvim_win_is_valid(original_window) then
-                vim.notify("Original window is no longer valid", vim.log.levels.ERROR)
-                return
-            end
-
-            local open_to_cmd = "edit +" .. lnum .. " " .. vim.fn.fnameescape(full_path)
-            if type(col) == "number" and col > 0 then
-                open_to_cmd = open_to_cmd .. " | normal! " .. col .. "|"
-            end
-
-            vim.fn.win_execute(original_window, open_to_cmd)
-            vim.api.nvim_set_current_win(original_window)
+            navigation.jump_to(line, cfile, actual_cwd, original_window)
         end,
         noremap = true,
         silent = true,
@@ -302,7 +219,11 @@ function M.executor(cmd, cwd, opts)
 
     vim.api.nvim_buf_set_keymap(M.cling_buffer, "n", "ge", "", {
         callback = function()
-            export_output(M.cling_buffer, M.last_cmd, actual_cwd)
+            local ok, filepath = pcall(vim.fn.input, "Export to: ", vim.fn.getcwd() .. "/cling-output.log", "file")
+            if not ok or not filepath or filepath == "" then
+                return
+            end
+            navigation.export(M.cling_buffer, M.last_cmd, actual_cwd, filepath)
         end,
         noremap = true,
         silent = true,
