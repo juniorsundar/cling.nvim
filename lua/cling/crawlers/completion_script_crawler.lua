@@ -1,4 +1,5 @@
 --- @module 'cling.crawlers.completion_script_crawler'
+local command_node = require "cling.command_node"
 
 local M = {}
 
@@ -78,10 +79,7 @@ local function get_completions(bash_script, func_name, command_line)
 end
 
 local function build_tree(bash_script, func_name, binary_name, max_depth)
-    local tree = {
-        flags = {},
-        subcommands = {},
-    }
+    local tree = command_node.new()
 
     local queue = {}
     table.insert(queue, { binary_name, 0, tree })
@@ -124,11 +122,10 @@ local function build_tree(bash_script, func_name, binary_name, max_depth)
             end
 
             current_node.flags = flags
-            current_node.subcommands = {}
 
             if depth + 1 < max_depth then
                 for _, sub in ipairs(subcommands) do
-                    current_node.subcommands[sub] = {}
+                    current_node.subcommands[sub] = command_node.new()
                     local new_cmd = current_cmd .. " " .. sub
                     table.insert(queue, { new_cmd, depth + 1, current_node.subcommands[sub] })
                 end

@@ -69,8 +69,8 @@ function M.save(cwd)
     end
     table.insert(lines, "}")
     local content = table.concat(lines, "\n") .. "\n"
-    local utils = require "cling.utils"
-    utils.write_file(history_path(cwd), content)
+    local fs = require "cling.fs"
+    fs.write_file(history_path(cwd), content)
 end
 
 --- Load history from disk into the in-memory cache for cwd.

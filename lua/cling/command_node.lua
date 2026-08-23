@@ -5,6 +5,73 @@ local M = {}
 --- @field subcommands table<string, cling.CommandNode> Nested map of subcommands.
 --- @field completion_type? "dir"|"file" Optional hint for dynamic file/directory completion.
 
+--- Creates a well-formed CommandNode.
+--- @return cling.CommandNode
+function M.new()
+    return { flags = {}, subcommands = {} }
+end
+
+--- Walks the command tree from `node` following `args` and returns the sorted
+--- completion candidates for the word being completed (`arglead`).
+---
+--- Walk semantics:
+--- - Descending stops at the first occurrence of `arglead` in `args`.
+--- - Unknown args leave the walk at the current node.
+---
+--- Candidates: subcommand names and flags from the current node, plus
+--- filesystem candidates when the node has a `completion_type` (collected via
+--- `opts.filesystem_completer`, defaulting to `vim.fn.getcompletion`).
+--- Results are filtered by `arglead` prefix and sorted.
+---
+--- @param node cling.CommandNode The node to start walking from.
+--- @param args string[] Command-line arguments typed so far (command name excluded).
+--- @param arglead string The word being completed.
+--- @param opts? {filesystem_completer?: fun(arglead: string, completion_type: string): string[]} Optional overrides; inject a mock completer in tests.
+--- @return string[] matches Sorted candidate strings.
+--- @return cling.CommandNode current_node The node the walk ended at (so callers can detect the root).
+function M.find(node, args, arglead, opts)
+    opts = opts or {}
+    local filesystem_completer = opts.filesystem_completer or vim.fn.getcompletion
+
+    local current_node = node
+
+    for _, arg in ipairs(args) do
+        if arg == arglead then
+            break
+        end
+
+        if current_node.subcommands[arg] then
+            current_node = current_node.subcommands[arg]
+        end
+    end
+
+    local candidates = {}
+
+    for name, _ in pairs(current_node.subcommands) do
+        table.insert(candidates, name)
+    end
+
+    for _, flag in ipairs(current_node.flags) do
+        table.insert(candidates, flag)
+    end
+
+    if current_node.completion_type then
+        local files = filesystem_completer(arglead, current_node.completion_type)
+        for _, f in ipairs(files) do
+            table.insert(candidates, f)
+        end
+    end
+
+    local matches = {}
+    for _, cand in ipairs(candidates) do
+        if vim.startswith(cand, arglead) then
+            table.insert(matches, cand)
+        end
+    end
+    table.sort(matches)
+    return matches, current_node
+end
+
 --- Parses "Usage:" style help text (e.g., docker --help)
 --- @param content string
 --- @return cling.CommandNode
@@ -34,9 +101,9 @@ function M.parse_help(content)
         end
 
         if is_commands_section then
-            local cmd = line:match "^%s%s+(%w[%w%-]*)%s"
+            local cmd = line:match "^%s%s+(%w[%w%-]*)%s+%S" or line:match "^%s%s+(%w[%w%-]*)%s*$"
             if cmd then
-                subcommands[cmd] = { flags = {}, subcommands = {} }
+                subcommands[cmd] = M.new()
             end
         end
 
@@ -58,10 +125,10 @@ function M.parse_help(content)
 
     table.sort(flags)
 
-    return {
-        flags = flags,
-        subcommands = subcommands,
-    }
+    local node = M.new()
+    node.flags = flags
+    node.subcommands = subcommands
+    return node
 end
 
 --- Parses bash completion scripts
@@ -110,7 +177,8 @@ function M.parse_bash(binary_name, content)
                 table.insert(clean_opts, o)
             end
         end
-        subcommands[cmd] = { flags = clean_opts, subcommands = {} }
+        subcommands[cmd] = M.new()
+        subcommands[cmd].flags = clean_opts
     end
 
     if #flags == 0 and vim.tbl_count(subcommands) == 0 then
@@ -148,11 +216,11 @@ function M.parse_bash(binary_name, content)
         completion_type = "file"
     end
 
-    return {
-        flags = flags,
-        subcommands = subcommands,
-        completion_type = completion_type,
-    }
+    local node = M.new()
+    node.flags = flags
+    node.subcommands = subcommands
+    node.completion_type = completion_type
+    return node
 end
 
 --- Parses completion content and returns a completion tree.
@@ -174,6 +242,79 @@ function M.parse(binary_name, content)
     end
 
     return M.parse_bash(binary_name, content)
+end
+
+--- Serializes a CommandNode tree into a Lua string suitable for loadstring.
+--- Byte-compatible with the historical cling.utils.serialize output.
+---
+--- @param node cling.CommandNode
+--- @param indent? string Indentation string.
+--- @return string result The serialized Lua table string.
+function M.serialize(node, indent)
+    local serialize -- Forward declaration for recursion
+    serialize = function(t, ind)
+        ind = ind or "  "
+        local result = "{\n"
+
+        if t.completion_type then
+            result = result .. ind .. string.format("completion_type = %q,\n", t.completion_type)
+        end
+
+        result = result .. ind .. "flags = {"
+        if t.flags then
+            for _, v in ipairs(t.flags) do
+                result = result .. string.format("%q, ", v)
+            end
+        end
+        result = result .. "},\n"
+
+        result = result .. ind .. "subcommands = {\n"
+        if t.subcommands then
+            for cmd, child in pairs(t.subcommands) do
+                result = result .. ind .. string.format("  [%q] = ", cmd)
+                result = result .. serialize(child, ind .. "    ") .. ",\n"
+            end
+        end
+        result = result .. ind .. "}\n"
+
+        result = result .. ind:sub(1, -3) .. "}"
+        return result
+    end
+
+    return serialize(node, indent)
+end
+
+--- Recursively normalizes a node and its subcommands so every node is well-formed.
+---
+--- @param node cling.CommandNode
+local function normalize(node)
+    node.flags = node.flags or {}
+    node.subcommands = node.subcommands or {}
+    for _, child in pairs(node.subcommands) do
+        if type(child) == "table" then
+            normalize(child)
+        end
+    end
+end
+
+--- Loads a serialized CommandNode from a cache file.
+--- Returns nil if the file does not exist, contains invalid Lua, or does not
+--- return a table. Missing flags/subcommands fields are normalized to {} at
+--- every level of the tree.
+---
+--- @param path string Path to the cache file.
+--- @return cling.CommandNode? node The loaded node, or nil.
+function M.load(path)
+    local chunk = loadfile(path)
+    if not chunk then
+        return nil
+    end
+    local ok, result = pcall(chunk)
+    if not ok or type(result) ~= "table" then
+        return nil
+    end
+    normalize(result)
+    return result
 end
 
 return M

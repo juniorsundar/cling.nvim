@@ -139,8 +139,8 @@ local function export_output(buf, cmd, cwd)
     table.insert(cleaned, "-- vim: ft=log")
 
     local content = table.concat(cleaned, "\n") .. "\n"
-    local utils = require "cling.utils"
-    if utils.write_file(filepath, content) then
+    local fs = require "cling.fs"
+    if fs.write_file(filepath, content) then
         vim.notify("Output exported to " .. filepath, vim.log.levels.INFO)
     else
         vim.notify("Failed to export to " .. filepath, vim.log.levels.ERROR)

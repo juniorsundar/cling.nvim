@@ -1,5 +1,5 @@
 --- @module 'cling.crawlers.help_crawler'
-local parser = require "cling.parser"
+local command_node = require "cling.command_node"
 
 local M = {}
 
@@ -27,7 +27,7 @@ end
 local function crawl(binary, args, help_cmd, depth)
     -- Depth limit to prevent infinite recursion and excessive execution time.
     if depth > 4 then
-        return { flags = {}, subcommands = {} }
+        return command_node.new()
     end
 
     local cmd_parts = { binary }
@@ -43,7 +43,7 @@ local function crawl(binary, args, help_cmd, depth)
     end
 
     local content = exec(cmd_str)
-    local node = parser.parse_help(content)
+    local node = command_node.parse_help(content)
 
     for sub, _ in pairs(node.subcommands) do
         local new_args = { unpack(args) }
