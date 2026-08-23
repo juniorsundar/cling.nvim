@@ -1,3 +1,4 @@
+local command_node = require "cling.command_node"
 local core = require "cling.core"
 local history = require "cling.history"
 
@@ -35,9 +36,9 @@ local function ensure_completion(wrapper, on_complete, force)
     local cache_file = cache_dir .. "/" .. binary_name .. ".lua"
 
     if not force and vim.fn.filereadable(cache_file) == 1 then
-        local chunk = loadfile(cache_file)
-        if chunk then
-            on_complete(chunk())
+        local node = command_node.load(cache_file)
+        if node then
+            on_complete(node)
             return
         end
     end
@@ -82,9 +83,9 @@ local function ensure_completion(wrapper, on_complete, force)
     }, { text = true }, function(obj)
         if obj.code == 0 then
             vim.schedule(function()
-                local chunk = loadfile(cache_file)
-                if chunk then
-                    on_complete(chunk())
+                local node = command_node.load(cache_file)
+                if node then
+                    on_complete(node)
                     vim.notify("Completions for " .. binary_name .. " ready!", vim.log.levels.INFO)
                 else
                     vim.notify("Failed to load completions for " .. binary_name, vim.log.levels.ERROR)
@@ -202,50 +203,12 @@ function M.setup(args)
                 local args = vim.split(cmdline, "%s+")
                 table.remove(args, 1)
 
-                local current_node = completions
+                local matches, current_node = command_node.find(completions, args, arglead)
 
-                for _, arg in ipairs(args) do
-                    if arg == arglead then
-                        break
-                    end
-
-                    if current_node.subcommands and current_node.subcommands[arg] then
-                        current_node = current_node.subcommands[arg]
-                    end
+                if current_node == completions and vim.startswith("--reparse-completions", arglead) then
+                    table.insert(matches, "--reparse-completions")
                 end
 
-                local candidates = {}
-
-                if current_node.subcommands then
-                    for name, _ in pairs(current_node.subcommands) do
-                        table.insert(candidates, name)
-                    end
-                end
-
-                if current_node.flags then
-                    for _, flag in ipairs(current_node.flags) do
-                        table.insert(candidates, flag)
-                    end
-                end
-
-                if current_node == completions then
-                    table.insert(candidates, "--reparse-completions")
-                end
-
-                if current_node.completion_type then
-                    local files = vim.fn.getcompletion(arglead, current_node.completion_type)
-                    for _, f in ipairs(files) do
-                        table.insert(candidates, f)
-                    end
-                end
-
-                local matches = {}
-                for _, cand in ipairs(candidates) do
-                    if vim.startswith(cand, arglead) then
-                        table.insert(matches, cand)
-                    end
-                end
-                table.sort(matches)
                 return matches
             end
 
