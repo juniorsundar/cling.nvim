@@ -185,6 +185,21 @@ function M.executor(cmd, cwd, opts)
                     current_file = function()
                         return vim.fn.expand "%:p"
                     end,
+                    alternate_file = function()
+                        return vim.fn.expand "#"
+                    end,
+                    buffer_file = function(n)
+                        return vim.fn.expand("#" .. n)
+                    end,
+                    cursor_word = function()
+                        return vim.fn.expand "<cword>"
+                    end,
+                    cursor_WORD = function()
+                        return vim.fn.expand "<cWORD>"
+                    end,
+                    cursor_file = function()
+                        return vim.fn.expand "<cfile>"
+                    end,
                 },
             },
         })

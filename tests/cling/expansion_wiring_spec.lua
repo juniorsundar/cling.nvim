@@ -140,6 +140,66 @@ describe("expansion wiring", function()
         assert.equals("cat @%", core.last_cmd)
     end)
 
+    it("-- passthrough expands @<cword> from the window under the cursor", function()
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, { "my_cursor_word here" })
+        vim.cmd "1"
+        vim.cmd "normal! 1|"
+
+        cling.on_cli_command { fargs = { "--", "grep", "@<cword>", "/tmp" } }
+
+        assert_expanded_reaches_shell "grep my_cursor_word /tmp"
+    end)
+
+    it("-- passthrough expands @#N to buffer N's file path", function()
+        local alt = FAKE_FILE .. ".alt"
+        vim.fn.writefile({ "alt" }, alt)
+        -- vim.cmd is stubbed in this spec; use nvim_command to actually switch buffers.
+        vim.api.nvim_command("edit " .. alt)
+        local alt_bufnr = vim.api.nvim_get_current_buf()
+        vim.api.nvim_command("edit " .. FAKE_FILE)
+
+        cling.on_cli_command { fargs = { "--", "cat", "@#" .. alt_bufnr } }
+
+        assert_expanded_reaches_shell("cat " .. vim.fn.fnamemodify(alt, ":p"))
+        vim.api.nvim_command "enew" -- leave the alt buffer so deleting its file is safe
+        os.remove(alt)
+    end)
+
+    it("-- passthrough expands @<cWORD> preserving punctuation via the real provider", function()
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, { "foo.bar baz" })
+        vim.cmd "1"
+        vim.cmd "normal! 1|"
+
+        cling.on_cli_command { fargs = { "--", "test", "@<cWORD>" } }
+
+        assert_expanded_reaches_shell "test foo.bar"
+    end)
+
+    it("-- passthrough expands @<cfile> from the text under the cursor", function()
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, { "see src/main.lua here" })
+        -- vim.cmd is stubbed; set the cursor via API (0-indexed col onto "src").
+        vim.api.nvim_win_set_cursor(0, { 1, 4 })
+
+        cling.on_cli_command { fargs = { "--", "cat", "@<cfile>" } }
+
+        local expected = vim.fn.fnamemodify(vim.fs.joinpath(vim.fn.getcwd(), "src/main.lua"), ":p")
+        assert_expanded_reaches_shell("cat " .. expected)
+    end)
+
+    it("-- passthrough expands @# to the alternate file's path", function()
+        local alt = FAKE_FILE .. ".alt"
+        vim.fn.writefile({ "alt" }, alt)
+        -- vim.cmd is stubbed in this spec; use nvim_command to actually switch buffers.
+        vim.api.nvim_command("edit " .. alt)
+        vim.api.nvim_command("edit " .. FAKE_FILE)
+
+        cling.on_cli_command { fargs = { "--", "cat", "@#" } }
+
+        assert_expanded_reaches_shell("cat " .. vim.fn.fnamemodify(alt, ":p"))
+        vim.api.nvim_command "enew" -- leave the alt buffer so deleting its file is safe
+        os.remove(alt)
+    end)
+
     it("wrapper commands do NOT expand marked tokens", function()
         input_stub.returns ""
 
