@@ -6,6 +6,7 @@
 --- @field close_on_exit? boolean If true, wipe the buffer automatically when the terminal process exits.
 --- @field no_history? boolean If true, do not update last_cmd/last_cwd/last_smods. Useful for wrapper commands that should not pollute :Cling history.
 --- @field no_cwd_history? boolean If true, skip per-CWD history recording (history.add/save). Set when separate_history is disabled in config.
+--- @field expand? boolean If true, expand marked tokens (@%) in cmd against the execution CWD before the shell receives it. History still records the raw line. Set only by raw-line entry points; wrapper commands stay literal.
 
 --- @class cling.Core
 --- @field last_cmd string|nil Last executed command.
@@ -27,6 +28,7 @@ local _cling_windows = {}
 
 local history = require "cling.history"
 local navigation = require "cling.navigation"
+local expand = require "cling.expand"
 
 local M = {} --- @class cling.Core
 
@@ -173,16 +175,27 @@ function M.executor(cmd, cwd, opts)
         end
     end
 
-    -- Handle environment variables from .env
+    local original_window = vim.api.nvim_get_current_win()
+    local actual_cwd = cwd or vim.fn.getcwd()
+
+    if opts.expand then
+        cmd = expand.expand(cmd, actual_cwd, {
+            context = {
+                context_provider = {
+                    current_file = function()
+                        return vim.fn.expand "%:p"
+                    end,
+                },
+            },
+        })
+    end
+
     if M.last_env then
         cmd = ". " .. M.last_env .. " && " .. cmd
         M.last_env = nil
     end
 
-    local original_window = vim.api.nvim_get_current_win()
-    local actual_cwd = cwd or vim.fn.getcwd()
     local full_command_string = "cd " .. vim.fn.shellescape(actual_cwd, true) .. " && "
-
     full_command_string = full_command_string .. cmd
     local term_command = "sh -c " .. vim.fn.shellescape(full_command_string, true)
     local escaped_cmd = vim.fn.fnameescape(term_command)

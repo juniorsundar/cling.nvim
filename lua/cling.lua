@@ -117,7 +117,7 @@ end
 --- Re-runs the last executed command.
 function M.run_last()
     if core.last_cmd then
-        core.executor(core.last_cmd, core.last_cwd or vim.fn.getcwd(), { smods = core.last_smods })
+        core.executor(core.last_cmd, core.last_cwd or vim.fn.getcwd(), { smods = core.last_smods, expand = true })
     else
         vim.notify("No previous command executed", vim.log.levels.WARN)
     end
@@ -155,7 +155,11 @@ function M.on_cli_command(args)
             return
         end
 
-        core.executor(cmd, cwd, { smods = args.smods, no_cwd_history = M.config.separate_history == false })
+        core.executor(
+            cmd,
+            cwd,
+            { smods = args.smods, no_cwd_history = M.config.separate_history == false, expand = true }
+        )
         return
     end
 
@@ -164,7 +168,7 @@ function M.on_cli_command(args)
         for i = 2, #fargs do
             table.insert(cmd_parts, fargs[i])
         end
-        core.executor(table.concat(cmd_parts, " "), vim.fn.getcwd(), { smods = args.smods })
+        core.executor(table.concat(cmd_parts, " "), vim.fn.getcwd(), { smods = args.smods, expand = true })
         return
     elseif fargs[1] == "with-env" then
         M.with_env(args.smods)
