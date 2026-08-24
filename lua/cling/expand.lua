@@ -107,7 +107,74 @@ local function buffer_number_token(ctx, cwd, line, start)
     return vim.fn.fnamemodify(path, ":p"), #digits
 end
 
---- Expands marked tokens in a raw Cling command line against the execution CWD.
+--- Applies a single filename modifier to a path-like string, resolving
+--- relative forms (`:.`, `:~`) against the execution CWD and $HOME.
+local function apply_modifier(text, mod, cwd)
+    if mod == "p" then
+        if not vim.startswith(text, "/") then
+            text = vim.fs.joinpath(cwd, text)
+        end
+        return vim.fn.fnamemodify(text, ":p")
+    elseif mod == "~" then
+        local home = vim.env.HOME or ""
+        if home ~= "" then
+            if text == home then
+                return "~"
+            end
+            local prefix = home .. "/"
+            if vim.startswith(text, prefix) then
+                return "~" .. text:sub(#prefix)
+            end
+        end
+        return text
+    elseif mod == "." then
+        local norm_cwd = cwd:sub(-1) == "/" and cwd:sub(1, -2) or cwd
+        if text == norm_cwd then
+            return "."
+        end
+        local prefix = norm_cwd .. "/"
+        if vim.startswith(text, prefix) then
+            return "." .. text:sub(#prefix)
+        end
+        return text
+    elseif mod == "S" or mod == "q" then
+        return vim.fn.shellescape(text)
+    else
+        return vim.fn.fnamemodify(text, ":" .. mod)
+    end
+end
+
+--- Parses a chain of filename modifiers following a token site.
+--- Returns the list of modifiers, characters consumed, and an
+--- "unsupported" flag when a substitution modifier (`:s///`, `:gs///`)
+--- is encountered — in that case the whole marked site falls back to
+--- passthrough rather than being partially parsed.
+local function parse_modifiers(line, start)
+    local mods = {}
+    local j = start
+    local at_start = true
+    while true do
+        -- `.` and `~` are valid modifiers without a leading colon, but only as
+        -- the first modifier (e.g. `@%.`); once a `:mod` is seen, continuation
+        -- requires another colon (`@%:r.o` leaves `.o` literal).
+        local has_colon = line:sub(j, j) == ":"
+        local m = has_colon and line:sub(j + 1, j + 1) or line:sub(j, j)
+        if (not has_colon and m ~= "." and m ~= "~") or (not has_colon and not at_start) then
+            break
+        end
+        if m:match "^[p~%.htreqS]$" then
+            table.insert(mods, m)
+            j = j + (has_colon and 2 or 1)
+            at_start = false
+        elseif m == "s" or (m == "g" and line:sub(j + 2, j + 2) == "s") then
+            return nil, nil, true
+        else
+            break
+        end
+    end
+    return mods, j - start, false
+end
+
 ---@param line string The raw typed command line.
 ---@param cwd string The execution working directory.
 ---@param opts? cling.ExpandOpts Options with the injected context provider.
@@ -130,14 +197,32 @@ function M.expand(line, cwd, opts)
             if nxt == "#" then
                 local replacement, consumed = buffer_number_token(ctx, cwd, line, i + 2)
                 if replacement then
-                    table.insert(out, replacement)
-                    i = i + 1 + consumed + 1
+                    local mods, mods_consumed, unsupported = parse_modifiers(line, i + 1 + consumed + 1)
+                    if not unsupported then
+                        for _, mod in ipairs(mods or {}) do
+                            replacement = apply_modifier(replacement, mod, cwd)
+                        end
+                        table.insert(out, replacement)
+                        i = i + 1 + consumed + 1 + mods_consumed
+                    else
+                        table.insert(out, c)
+                        i = i + 1
+                    end
                 else
                     -- No usable @#N form; fall back to the bare-@# handler.
                     local fallback = token_handlers["#"](ctx, cwd)
                     if fallback then
-                        table.insert(out, fallback)
-                        i = i + 2
+                        local mods, mods_consumed, unsupported = parse_modifiers(line, i + 2)
+                        if not unsupported then
+                            for _, mod in ipairs(mods or {}) do
+                                fallback = apply_modifier(fallback, mod, cwd)
+                            end
+                            table.insert(out, fallback)
+                            i = i + 2 + mods_consumed
+                        else
+                            table.insert(out, c)
+                            i = i + 1
+                        end
                     else
                         table.insert(out, c)
                         i = i + 1
@@ -160,12 +245,21 @@ function M.expand(line, cwd, opts)
                         consumed_len = 2
                     end
                 end
-                if replacement then
-                    table.insert(out, replacement)
-                    i = i + consumed_len
-                else
+                if not replacement then
                     table.insert(out, c)
                     i = i + 1
+                else
+                    local mods, mods_consumed, unsupported = parse_modifiers(line, i + consumed_len)
+                    if not unsupported then
+                        for _, mod in ipairs(mods or {}) do
+                            replacement = apply_modifier(replacement, mod, cwd)
+                        end
+                        table.insert(out, replacement)
+                        i = i + consumed_len + mods_consumed
+                    else
+                        table.insert(out, c)
+                        i = i + 1
+                    end
                 end
             end
         end
