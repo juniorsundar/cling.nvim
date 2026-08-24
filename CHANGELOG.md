@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.6.0](https://github.com/juniorsundar/cling.nvim/compare/v0.5.0...v0.6.0) (2026-08-24)
+
+
+### Features
+
+* Add `expand.lua` to handle vim-command expansion ([d887afc](https://github.com/juniorsundar/cling.nvim/commit/d887afc8280b8b0536f3f365957062559a2f817a))
+* **expand:** Add filename mods and chains support ([856d504](https://github.com/juniorsundar/cling.nvim/commit/856d50407020d399d905584bf8af2864f0d3d786))
+* **expand:** Add non-modifier tokens support ([0040b5e](https://github.com/juniorsundar/cling.nvim/commit/0040b5e2543e6a3d68de3134f026a0ac9a729919))
+
+
+### Bug Fixes
+
+* Padding on status/sign/foldcolumn was pushing things out of view ([e1fa6e7](https://github.com/juniorsundar/cling.nvim/commit/e1fa6e76d62b9eb02f3f0cfd775c8fab06f9941a))
+
+
+### Code Refactoring
+
+* extract `command_node` -&gt; universal node invariant ([a78685b](https://github.com/juniorsundar/cling.nvim/commit/a78685b2e30fa0c5232807e5f7065ca9730de428))
+* **navigation:** extract jump_to and export from executor into navigation module ([696fd87](https://github.com/juniorsundar/cling.nvim/commit/696fd87ec6750e1ede677fa86bf7a389d6ede9ad))
+
+
+### Tests
+
+* **core:** add teardown-on-close test coverage for all close paths ([551b03b](https://github.com/juniorsundar/cling.nvim/commit/551b03b757ab989739d4297f14f39c9224778286))
+
 ## [0.5.0](https://github.com/juniorsundar/cling.nvim/compare/v0.4.0...v0.5.0) (2026-04-25)
 
 
