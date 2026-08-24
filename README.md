@@ -115,6 +115,85 @@ pressing `ge` in normal mode while in the output buffer. The export will:
 -- vim: ft=log
 ```
 
+## Filename Expansion
+
+Cling passes commands to the shell literally by default. `%`, `#`, `<`, and
+`>` keep their normal shell meanings, so existing commands keep working as
+before.
+
+To expand a filename or cursor value, prefix the token with `@`:
+
+```
+cat @%               →  cat /path/to/current.lua
+grep @<cWORD> src/   →  grep WordUnderCursor src/
+```
+
+Cling consumes `@` only when it is directly before a supported token. Other
+uses of `@` pass through unchanged. Use `@@` for a literal `@`:
+
+```
+echo me@example.com  →  echo me@example.com
+echo "type @@%"      →  echo "type @%"
+```
+
+### Supported Tokens
+
+| Marker | Expands to |
+|---|---|
+| `@%` | the current file |
+| `@#` | the alternate file |
+| `@#N` | the file for buffer `N` |
+| `@<cword>` | the word under the cursor |
+| `@<cWORD>` | the WORD under the cursor. Unlike `<cword>`, it keeps punctuation such as `foo.bar`. |
+| `@<cfile>` | the file path under the cursor |
+
+### Modifiers
+
+Add modifiers after a token to transform its value:
+
+*   **Path**: `:p` (full path), `:~` (relative to `$HOME`), `:.` (relative to the CWD)
+*   **Anatomy**: `:h` (directory), `:t` (basename), `:r` (name without extension), `:e` (extension)
+*   **Shell-safety**: `:S` / `:q` (shell-escape the value)
+
+Modifiers run from left to right. Given a current file of
+`/home/user/proj/src/cling.lua`:
+
+```
+@%          →  /home/user/proj/src/cling.lua
+@%:h        →  /home/user/proj/src
+@%:t        →  cling.lua
+@%:t:r      →  cling
+@%:e        →  lua
+@%:p:h:t    →  src
+```
+
+Substitution modifiers (`:s///`, `:gs///`) are not supported. A marked token
+using either form passes through unchanged.
+
+### Execution CWD
+
+Cling resolves paths against the execution CWD selected at the prompt, not the
+editor's current directory. In particular, `@%:.` is relative to the directory
+where Cling runs the command.
+
+### Passthrough and Escaping
+
+Unmarked `%`, `#`, `<`, `>`, and backticks keep their shell meanings. These
+commands are unchanged:
+
+```
+printf '%s\n' hi
+make x # note
+sort < a > b
+echo `date`
+```
+
+### Wrapper Commands
+
+Expansion applies to commands entered through the Cling prompt, `:Cling -- ...`,
+and replayed history. Wrapper commands such as `:JJ` and `:Docker` do not
+expand markers; their arguments stay literal.
+
 ## Configuration
 
 You can define custom wrappers for your CLI tools in the `setup` function. Wrappers allow you to create specific Neovim user commands (e.g., `:JJ`, `:Docker`) with autocompletions that can either be derived from the CLI tool itself, or from the completion bash file.
