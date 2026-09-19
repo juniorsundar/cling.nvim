@@ -1,5 +1,5 @@
 *cling.nvim.txt*
-                           For Neovim >= 0.10.0    Last change: 2026 August 24
+                        For Neovim >= 0.10.0    Last change: 2026 September 19
 
 ==============================================================================
 Table of Contents                               *cling.nvim-table-of-contents*
@@ -358,7 +358,7 @@ It uses the `completion_cmd` method to generate completions dynamically.
             local function strip_ansi(str)
                 return str:gsub("\27%[[0-9;]*m", "")
             end
-    
+
             local function get_file_from_line(line)
                 local clean = strip_ansi(line)
                 local file = clean:match "^Modified regular file (.*):$"
@@ -383,18 +383,18 @@ It uses the `completion_cmd` method to generate completions dynamically.
                 end
                 return nil
             end
-    
+
             local function populate_quickfix(buf)
                 local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
                 local qf_list = {}
                 local current_file = nil
                 local current_type = nil
                 local last_was_gap = true
-    
+
                 for _, raw_line in ipairs(lines) do
                     local line = strip_ansi(raw_line)
                     local file, type = get_file_from_line(line)
-    
+
                     if file then
                         current_file = vim.trim(file)
                         current_type = type
@@ -417,7 +417,7 @@ It uses the `completion_cmd` method to generate completions dynamically.
                         end
                     end
                 end
-    
+
                 if #qf_list > 0 then
                     vim.fn.setqflist(qf_list, "r")
                     vim.notify("Quickfix populated with " .. #qf_list .. " entries", vim.log.levels.INFO)
@@ -426,7 +426,7 @@ It uses the `completion_cmd` method to generate completions dynamically.
                     vim.notify("No file headers or hunks found", vim.log.levels.WARN)
                 end
             end
-    
+
             require("cling").setup {
                 wrappers = {
                     {
@@ -469,7 +469,7 @@ lazygit <https://github.com/jesseduffield/lazygit> is a terminal UI for git.
             },
         },
     }
-    
+
     vim.keymap.set("n", "<leader>GL", function()
         vim.cmd "Lazygit"
         vim.cmd "wincmd T"
@@ -504,7 +504,7 @@ children.
             },
         },
     }
-    
+
     vim.keymap.set("n", "<leader>o", function()
         vim.cmd "Yazi"
         vim.cmd "startinsert"
@@ -524,21 +524,21 @@ Generating tab-completions can be achieved through following 4 methods:
             command = "Docker",
             help_cmd = "--help",
         },
-    
+
         -- Method 2: Completion Command
         {
             binary = "jj",
             command = "JJ",
             completion_cmd = "jj util completion bash",
         },
-    
+
         -- Method 3: Local File
         {
             binary = "git",
             command = "Git",
             completion_file = "/usr/share/bash-completion/completions/git",
         },
-    
+
         -- Method 4: Remote URL (requires curl)
         {
             binary = "eza",
