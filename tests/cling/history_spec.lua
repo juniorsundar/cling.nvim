@@ -1,5 +1,6 @@
 local history = require "cling.history"
 local core = require "cling.core"
+local stub = require "luassert.stub"
 
 local history_base_dir = vim.fn.stdpath "data" .. "/cling/history"
 local tmp_cwd = "/tmp/cling-history-spec-" .. vim.fn.getpid()
@@ -22,6 +23,11 @@ end
 
 describe("history", function()
     before_each(function()
+        -- executor() now validates the cwd (termopen's cwd option is strict),
+        -- so the integration cwd must exist on disk.
+        if vim.fn.isdirectory(tmp_cwd) ~= 1 then
+            vim.fn.mkdir(tmp_cwd, "p")
+        end
         for _, cwd in ipairs(test_cwds) do
             history.clear(cwd)
         end
@@ -51,6 +57,9 @@ describe("history", function()
             history.clear(cwd)
         end
         cleanup()
+        if vim.fn.isdirectory(tmp_cwd) == 1 then
+            vim.fn.delete(tmp_cwd, "d")
+        end
     end)
 
     describe("add", function()
@@ -105,6 +114,39 @@ describe("history", function()
             history.save(tmp_cwd)
             local stat = vim.uv.fs_stat(history_base_dir)
             assert.is_not_nil(stat, "history base dir should exist after save")
+        end)
+
+        it("tolerates losing the mkdir race to a concurrent creator (E739 EEXIST)", function()
+            vim.fn.mkdir(history_base_dir, "p")
+            local real_mkdir = vim.fn.mkdir
+            local real_isdirectory = vim.fn.isdirectory
+            -- Call #1 (the guard) must see "missing" to enter the race window;
+            -- later calls (the fix's post-failure recheck) must see the truth.
+            local isdir_calls = 0
+            local isdir_stub = stub(vim.fn, "isdirectory", function(path)
+                if path == history_base_dir then
+                    isdir_calls = isdir_calls + 1
+                    if isdir_calls == 1 then
+                        return 0
+                    end
+                end
+                return real_isdirectory(path)
+            end)
+            local mkdir_stub = stub(vim.fn, "mkdir", function(path, flags)
+                if path == history_base_dir then
+                    error("Vim:E739: Cannot create directory " .. history_base_dir .. ": file already exists")
+                end
+                return real_mkdir(path, flags)
+            end)
+
+            history.add(tmp_cwd, "race-cmd")
+            local ok, err = pcall(history.save, tmp_cwd)
+            mkdir_stub:revert()
+            isdir_stub:revert()
+
+            assert.is_true(ok, "save must tolerate the E739 mkdir race — got: " .. tostring(err))
+            local stat = vim.uv.fs_stat(history_path(tmp_cwd))
+            assert.is_not_nil(stat, "history file should still be persisted after the race")
         end)
     end)
 

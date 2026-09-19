@@ -29,7 +29,11 @@ end
 local function ensure_completion(wrapper, on_complete, force)
     local cache_dir = vim.fn.stdpath "data" .. "/cling/completions"
     if vim.fn.isdirectory(cache_dir) == 0 then
-        vim.fn.mkdir(cache_dir, "p")
+        local ok = pcall(vim.fn.mkdir, cache_dir, "p")
+        if not ok and vim.fn.isdirectory(cache_dir) == 0 then
+            vim.notify("Error: cannot create directory " .. cache_dir, vim.log.levels.ERROR)
+            return
+        end
     end
 
     local binary_name = type(wrapper.binary) == "function" and wrapper.command or wrapper.binary

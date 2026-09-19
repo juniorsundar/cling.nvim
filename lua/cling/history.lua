@@ -60,7 +60,11 @@ end
 function M.save(cwd)
     local dir = vim.fn.stdpath "data" .. "/cling/history"
     if vim.fn.isdirectory(dir) == 0 then
-        vim.fn.mkdir(dir, "p")
+        local ok = pcall(vim.fn.mkdir, dir, "p")
+        if not ok and vim.fn.isdirectory(dir) == 0 then
+            vim.notify("Error: cannot create directory " .. dir, vim.log.levels.ERROR)
+            return
+        end
     end
     local list = _cache[cwd] or {}
     local lines = { "return {" }

@@ -8,8 +8,10 @@ describe("expansion wiring", function()
     local FAKE_FILE = vim.fs.joinpath(vim.fn.stdpath "run", "cling_expand_fake_target.txt")
     local input_stub
     local cmd_stub
+    local termopen_stub
     local notify_stub
     local captured_term_cmd
+    local captured_term_cwd
 
     local function fake_current_file()
         return vim.fn.fnamemodify(FAKE_FILE, ":p")
@@ -40,10 +42,13 @@ describe("expansion wiring", function()
         notify_stub = stub(vim, "notify")
 
         captured_term_cmd = nil
-        cmd_stub = stub(vim, "cmd", function(command)
-            if type(command) == "string" and command:find "term://" then
-                captured_term_cmd = command
-            end
+        captured_term_cwd = nil
+
+        cmd_stub = stub(vim, "cmd")
+        termopen_stub = stub(vim.fn, "termopen", function(command, job_opts)
+            captured_term_cmd = command
+            captured_term_cwd = job_opts and job_opts.cwd
+            return 0
         end)
 
         input_stub = stub(vim.fn, "input")
@@ -51,6 +56,7 @@ describe("expansion wiring", function()
 
     after_each(function()
         input_stub:revert()
+        termopen_stub:revert()
         cmd_stub:revert()
         notify_stub:revert()
 
@@ -70,7 +76,7 @@ describe("expansion wiring", function()
     --- Vim shellescapes the terminal command, so escape backslashes are stripped
     --- before matching the full expected phrase in order.
     local function assert_expanded_reaches_shell(expected_expanded)
-        assert.truthy(captured_term_cmd, "executor should have issued a term:// command")
+        assert.truthy(captured_term_cmd, "executor should have started a termopen job")
         local unescaped = captured_term_cmd:gsub("\\", "")
         assert.truthy(
             unescaped:find(expected_expanded, 1, true),
@@ -206,8 +212,9 @@ describe("expansion wiring", function()
         -- Wrappers call core.executor directly without opts.expand.
         core.executor("echo @%", "/tmp", { no_history = true })
 
-        -- The marker must survive (vim only percent-escapes it); no expansion.
-        assert.truthy(captured_term_cmd:find("echo\\ @", 1, true))
+        -- The marker must survive; no expansion. (shellescape single-quotes
+        -- the command instead of backslash-escaping, so the space is intact.)
+        assert.truthy(captured_term_cmd:find("echo @", 1, true))
         assert.falsy(captured_term_cmd:find(fake_current_file(), 1, true))
     end)
 end)

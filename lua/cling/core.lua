@@ -47,30 +47,27 @@ M.cling_buffer = nil
 
 --- Builds the vim split command string based on smods.
 --- @param smods table|nil Command modifiers from nvim_create_user_command.
---- @param escaped_cmd string The fnameescape'd terminal command.
 --- @return string
-local function build_split_cmd(smods, escaped_cmd)
+local function build_split_cmd(smods)
     if not smods then
-        return "bot split term://" .. escaped_cmd
+        return "botright new"
     end
 
     if smods.tab and smods.tab >= 0 then
-        return "tabnew term://" .. escaped_cmd
+        return "tabnew"
     end
 
     local prefix = ""
     if smods.split == "topleft" then
         prefix = "topleft "
-    elseif smods.split == "botright" then
-        prefix = "botright "
     else
         prefix = "botright " -- default position
     end
 
     if smods.vertical then
-        return prefix .. "vsplit term://" .. escaped_cmd
+        return prefix .. "vnew"
     else
-        return prefix .. "split term://" .. escaped_cmd
+        return prefix .. "new"
     end
 end
 
@@ -165,6 +162,14 @@ function M.executor(cmd, cwd, opts)
         vim.notify("No command to execute", vim.log.levels.ERROR)
         return
     end
+
+    local actual_cwd = cwd or vim.fn.getcwd()
+    actual_cwd = vim.fn.expand(actual_cwd)
+    if vim.fn.isdirectory(actual_cwd) ~= 1 then
+        vim.notify("Error: not a valid directory: " .. actual_cwd, vim.log.levels.ERROR)
+        return
+    end
+
     if not opts.no_history then
         M.last_cmd = cmd
         M.last_cwd = cwd
@@ -176,7 +181,6 @@ function M.executor(cmd, cwd, opts)
     end
 
     local original_window = vim.api.nvim_get_current_win()
-    local actual_cwd = cwd or vim.fn.getcwd()
 
     if opts.expand then
         cmd = expand.expand(cmd, actual_cwd, {
@@ -210,17 +214,17 @@ function M.executor(cmd, cwd, opts)
         M.last_env = nil
     end
 
-    local full_command_string = "cd " .. vim.fn.shellescape(actual_cwd, true) .. " && "
-    full_command_string = full_command_string .. cmd
-    local term_command = "sh -c " .. vim.fn.shellescape(full_command_string, true)
-    local escaped_cmd = vim.fn.fnameescape(term_command)
-
     if not cmd or cmd == "" then
         vim.notify("Error: 'cmd' is required.", vim.log.levels.ERROR)
         return
     end
 
-    vim.cmd(build_split_cmd(opts.smods, escaped_cmd))
+    -- Run in the job's own working directory via termopen's cwd option:
+    -- no `cd <dir> &&` shell prefix, no command in the buffer name.
+    local term_command = "sh -c " .. vim.fn.shellescape(cmd, true)
+
+    vim.cmd(build_split_cmd(opts.smods))
+    vim.fn.termopen(term_command, { cwd = actual_cwd })
 
     M.cling_buffer = vim.api.nvim_get_current_buf()
     M.cling_window = vim.api.nvim_get_current_win()
