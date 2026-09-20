@@ -1,7 +1,5 @@
 --- Terminal-output operations: exporting buffer content with a metadata footer.
 
-local fs = require "cling.fs"
-
 --- Errorformat used to parse locations out of terminal output lines.
 local DEFAULT_EFM = table.concat({
     "%f:%l:%c:%m",
@@ -74,8 +72,7 @@ function M.export(buf, cmd, cwd, filepath)
     table.insert(lines, "-- Timestamp: " .. os.date "!%Y-%m-%dT%H:%M:%SZ")
     table.insert(lines, "-- vim: ft=log")
 
-    local content = table.concat(lines, "\n") .. "\n"
-    if fs.write_file(filepath, content) then
+    if vim.fn.writefile(lines, filepath) == 0 then
         vim.notify("Output exported to " .. filepath, vim.log.levels.INFO)
     else
         vim.notify("Failed to export to " .. filepath, vim.log.levels.ERROR)

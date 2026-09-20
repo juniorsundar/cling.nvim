@@ -1,5 +1,6 @@
 local assert = require "luassert"
 local command_node = require "cling.command_node"
+local stub = require "luassert.stub"
 
 --- Builds a node from shorthand.
 --- @param opts table {flags?, subcommands?, completion_type?}
@@ -12,19 +13,22 @@ local function build_node(opts)
     return node
 end
 
---- Mock filesystem completer recording its calls.
---- @param results string[]
---- @return fun(arglead: string, ctype: string): string[], table call_log
-local function mock_completer(results)
-    local calls = {}
-    local fn = function(arglead, completion_type)
-        table.insert(calls, { arglead = arglead, completion_type = completion_type })
-        return results
-    end
-    return fn, calls
-end
-
 describe("command_node.find", function()
+    local getcompletion_stub
+
+    local function stub_getcompletion(results)
+        getcompletion_stub = stub(vim.fn, "getcompletion", function()
+            return results
+        end)
+    end
+
+    after_each(function()
+        if getcompletion_stub then
+            getcompletion_stub:revert()
+            getcompletion_stub = nil
+        end
+    end)
+
     describe("tree walking", function()
         it("stops descending at arglead", function()
             -- "git commit" completing "commit": the typed token equals the
@@ -35,21 +39,31 @@ describe("command_node.find", function()
                     commit = build_node { flags = { "--amend" } },
                 },
             }
-            local matches = command_node.find(root, { "commit" }, "commit", {})
+            local matches = command_node.find(root, { "commit" }, "commit")
             -- Only the root's subcommand name matches; --amend (from inside
             -- "commit") proves no descent happened.
             assert.are.same({ "commit" }, matches)
         end)
 
-        it("stays at current node on unknown arg", function()
+        it("descends through known subcommands", function()
             local root = build_node {
-                flags = { "--verbose" },
                 subcommands = {
-                    add = build_node { flags = { "--dry-run" } },
+                    commit = build_node { flags = { "--amend" } },
                 },
             }
-            local matches = command_node.find(root, { "bogus" }, "", {})
-            assert.are.same({ "--verbose", "add" }, matches)
+            local matches = command_node.find(root, { "commit" }, "--a")
+            assert.are.same({ "--amend" }, matches)
+        end)
+
+        it("stays at the current node on unknown args", function()
+            local root = build_node {
+                subcommands = {
+                    commit = build_node { flags = { "--amend" } },
+                    status = build_node {},
+                },
+            }
+            local matches = command_node.find(root, { "bogus" }, "st")
+            assert.are.same({ "status" }, matches)
         end)
 
         it("first occurrence of arglead stops the walk", function()
@@ -63,41 +77,38 @@ describe("command_node.find", function()
                 },
             }
             -- "add add" — the first "add" is arglead, so we must NOT descend.
-            local matches = command_node.find(root, { "add", "add" }, "add", {})
+            local matches = command_node.find(root, { "add", "add" }, "add")
             assert.are.same({ "add" }, matches)
         end)
     end)
 
     describe("candidate collection", function()
         it("collects subcommand names from the current node", function()
-            local root = build_node {
-                subcommands = {
-                    commit = build_node {},
-                    add = build_node {},
-                },
-            }
-            local matches = command_node.find(root, {}, "", {})
+            local root = build_node { subcommands = { add = build_node {}, commit = build_node {} } }
+            local matches = command_node.find(root, {}, "")
             assert.are.same({ "add", "commit" }, matches)
         end)
 
         it("collects flags from the current node", function()
             local root = build_node { flags = { "-f", "--force" } }
-            local matches = command_node.find(root, {}, "", {})
+            local matches = command_node.find(root, {}, "")
             assert.are.same({ "--force", "-f" }, matches)
         end)
 
-        it("collects filesystem candidates when completion_type set and completer returns", function()
-            local completer = mock_completer { "src/", "tests/" }
+        it("collects filesystem candidates when completion_type is set", function()
+            stub_getcompletion { "src/", "tests/" }
             local root = build_node { completion_type = "dir" }
-            local matches = command_node.find(root, {}, "", { filesystem_completer = completer })
+            local matches = command_node.find(root, {}, "")
             assert.are.same({ "src/", "tests/" }, matches)
+            assert.equals(1, #getcompletion_stub.calls)
         end)
 
-        it("collects no filesystem candidates when completion_type absent", function()
-            local completer = mock_completer { "src/" }
+        it("collects no filesystem candidates when completion_type is absent", function()
+            stub_getcompletion { "src/" }
             local root = build_node {}
-            local matches = command_node.find(root, {}, "", { filesystem_completer = completer })
+            local matches = command_node.find(root, {}, "")
             assert.are.same({}, matches)
+            assert.equals(0, #getcompletion_stub.calls)
         end)
 
         it("filters candidates by arglead prefix", function()
@@ -105,7 +116,7 @@ describe("command_node.find", function()
                 flags = { "--force", "--file" },
                 subcommands = { fetch = build_node {} },
             }
-            local matches = command_node.find(root, {}, "--f", {})
+            local matches = command_node.find(root, {}, "--f")
             assert.are.same({ "--file", "--force" }, matches)
         end)
 
@@ -114,54 +125,22 @@ describe("command_node.find", function()
                 flags = { "--zzz" },
                 subcommands = { aaa = build_node {} },
             }
-            local matches = command_node.find(root, {}, "", {})
+            local matches = command_node.find(root, {}, "")
             assert.are.same({ "--zzz", "aaa" }, matches)
         end)
     end)
 
-    describe("filesystem_completer injection", function()
-        it("is called with arglead and completion_type; vim.fn.getcompletion not used when provided", function()
-            local calls
-            local completer
-            completer, calls = mock_completer { "Makefile" }
+    describe("filesystem completion", function()
+        it("queries vim.fn.getcompletion with arglead and completion_type", function()
+            stub_getcompletion { "Makefile" }
             local root = build_node { completion_type = "file" }
 
-            -- Guard: if find() fell back to vim.fn.getcompletion instead of
-            -- calling the mock, the real filesystem would be consulted and
-            -- calls would stay empty. Assert on the mock's call log instead.
-            local original_getcompletion = vim.fn.getcompletion
-            local getcompletion_called = false
-            vim.fn.getcompletion = function()
-                getcompletion_called = true
-                return {}
-            end
+            local matches = command_node.find(root, {}, "Make")
 
-            local matches = command_node.find(root, { "sub" }, "Ma", { filesystem_completer = completer })
-
-            vim.fn.getcompletion = original_getcompletion
-
-            assert.are.same(1, #calls)
-            assert.are.equal("Ma", calls[1].arglead)
-            assert.are.equal("file", calls[1].completion_type)
-            assert.False(getcompletion_called)
+            local call = getcompletion_stub.calls[1]
+            assert.are.same("Make", call.refs[1])
+            assert.are.same("file", call.refs[2])
             assert.are.same({ "Makefile" }, matches)
-        end)
-
-        it("defaults to vim.fn.getcompletion when not provided", function()
-            local root = build_node { completion_type = "file" }
-            local original = vim.fn.getcompletion
-            local received = nil
-            vim.fn.getcompletion = function(arglead, ctype)
-                received = { arglead = arglead, ctype = ctype }
-                return { "README.md" }
-            end
-
-            local ok, matches = pcall(command_node.find, root, {}, "REA", {})
-
-            vim.fn.getcompletion = original
-            assert.True(ok)
-            assert.are.same({ arglead = "REA", ctype = "file" }, received)
-            assert.are.same({ "README.md" }, matches)
         end)
     end)
 end)

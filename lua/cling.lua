@@ -247,11 +247,7 @@ function M.setup(args)
                     smods = cargs.smods,
                     close_on_exit = wrapper.close_on_exit,
                     no_history = wrapper.no_history ~= false,
-                    on_open = function(buf)
-                        if wrapper.keymaps then
-                            wrapper.keymaps(buf)
-                        end
-                    end,
+                    keymaps = wrapper.keymaps,
                     on_close = wrapper.on_close,
                 })
             end, {

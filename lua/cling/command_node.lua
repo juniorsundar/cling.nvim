@@ -19,20 +19,15 @@ end
 --- - Unknown args leave the walk at the current node.
 ---
 --- Candidates: subcommand names and flags from the current node, plus
---- filesystem candidates when the node has a `completion_type` (collected via
---- `opts.filesystem_completer`, defaulting to `vim.fn.getcompletion`).
---- Results are filtered by `arglead` prefix and sorted.
+--- filesystem candidates when the node has a `completion_type` (via
+--- `vim.fn.getcompletion`). Results are filtered by `arglead` prefix and sorted.
 ---
 --- @param node cling.CommandNode The node to start walking from.
 --- @param args string[] Command-line arguments typed so far (command name excluded).
 --- @param arglead string The word being completed.
---- @param opts? {filesystem_completer?: fun(arglead: string, completion_type: string): string[]} Optional overrides; inject a mock completer in tests.
 --- @return string[] matches Sorted candidate strings.
 --- @return cling.CommandNode current_node The node the walk ended at (so callers can detect the root).
-function M.find(node, args, arglead, opts)
-    opts = opts or {}
-    local filesystem_completer = opts.filesystem_completer or vim.fn.getcompletion
-
+function M.find(node, args, arglead)
     local current_node = node
 
     for _, arg in ipairs(args) do
@@ -56,7 +51,7 @@ function M.find(node, args, arglead, opts)
     end
 
     if current_node.completion_type then
-        local files = filesystem_completer(arglead, current_node.completion_type)
+        local files = vim.fn.getcompletion(arglead, current_node.completion_type)
         for _, f in ipairs(files) do
             table.insert(candidates, f)
         end
@@ -244,44 +239,11 @@ function M.parse(binary_name, content)
     return M.parse_bash(binary_name, content)
 end
 
---- Serializes a CommandNode tree into a Lua string suitable for loadstring.
---- Byte-compatible with the historical cling.utils.serialize output.
----
+--- Serializes a CommandNode tree into a Lua table literal.
 --- @param node cling.CommandNode
---- @param indent? string Indentation string.
---- @return string result The serialized Lua table string.
-function M.serialize(node, indent)
-    local serialize -- Forward declaration for recursion
-    serialize = function(t, ind)
-        ind = ind or "  "
-        local result = "{\n"
-
-        if t.completion_type then
-            result = result .. ind .. string.format("completion_type = %q,\n", t.completion_type)
-        end
-
-        result = result .. ind .. "flags = {"
-        if t.flags then
-            for _, v in ipairs(t.flags) do
-                result = result .. string.format("%q, ", v)
-            end
-        end
-        result = result .. "},\n"
-
-        result = result .. ind .. "subcommands = {\n"
-        if t.subcommands then
-            for cmd, child in pairs(t.subcommands) do
-                result = result .. ind .. string.format("  [%q] = ", cmd)
-                result = result .. serialize(child, ind .. "    ") .. ",\n"
-            end
-        end
-        result = result .. ind .. "}\n"
-
-        result = result .. ind:sub(1, -3) .. "}"
-        return result
-    end
-
-    return serialize(node, indent)
+--- @return string
+function M.serialize(node)
+    return vim.inspect(node)
 end
 
 --- Recursively normalizes a node and its subcommands so every node is well-formed.

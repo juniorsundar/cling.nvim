@@ -6,25 +6,7 @@ local M = {}
 -- Helper to find the bash wrapper
 local function get_bash_wrapper()
     local runtime_files = vim.api.nvim_get_runtime_file("scripts/get_completion.bash", false)
-    if #runtime_files > 0 then
-        return runtime_files[1]
-    end
-
-    local cwd_wrapper = vim.fn.getcwd() .. "/scripts/get_completion.bash"
-    if vim.fn.filereadable(cwd_wrapper) == 1 then
-        return cwd_wrapper
-    end
-
-    return "scripts/get_completion.bash"
-end
-
--- Utility to split string by newline
-local function split_lines(str)
-    local lines = {}
-    for line in str:gmatch "[^\r\n]+" do
-        table.insert(lines, line)
-    end
-    return lines
+    return runtime_files[1]
 end
 
 -- Find entrypoint function name in bash script
@@ -62,7 +44,7 @@ local function get_completions(bash_script, func_name, command_line)
     )
     local output = vim.fn.system(cmd)
 
-    local raw_lines = split_lines(output)
+    local raw_lines = vim.split(output, "[\r\n]+", { trimempty = false })
     local seen = {}
     local distinct = {}
 

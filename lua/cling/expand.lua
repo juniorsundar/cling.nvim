@@ -2,54 +2,14 @@
 ---
 --- Pure transformation: `(raw command line, execution CWD) → expanded command
 --- line`. A marker `@` immediately followed by a recognized token is consumed
---- and the token expands; every other character — including any other `@` —
---- passes through verbatim. `@@` yields a single literal `@`.
----
---- Editor-dependent inputs are supplied through an injectable context provider
---- (`opts.context_provider`) so this module has no hard dependency on
---- window/buffer state during tests.
+--- and the token resolves via native `expand()`; every other character —
+--- including any other `@` — passes through verbatim. `@@` yields a single
+--- literal `@`. Relative paths absolutize against the execution CWD, not the
+--- editor's current working directory.
 
 local M = {}
 
----@class cling.ExpandContextProvider
----@field current_file? fun(): string Resolves the current file's path.
----@field alternate_file? fun(): string Resolves the alternate file's path.
-
----@class cling.ExpandContext
----@field context_provider? cling.ExpandContextProvider
-
----@class cling.ExpandOpts
----@field cwd string The execution CWD tokens resolve against.
----@field context? cling.ExpandContext Injected editor state.
-
---- Recognized token handlers. Each returns the replacement string for the text
---- following the marker, or nil if the token is not recognized.
-local token_handlers = {
-    ["%"] = function(ctx, cwd)
-        local provider = ctx and ctx.context_provider
-        local current_file = provider and provider.current_file and provider.current_file()
-        if not current_file or current_file == "" then
-            return nil
-        end
-        if not vim.startswith(current_file, "/") then
-            current_file = vim.fs.joinpath(cwd, current_file)
-        end
-        return vim.fn.fnamemodify(current_file, ":p")
-    end,
-    ["#"] = function(ctx, cwd)
-        local provider = ctx and ctx.context_provider
-        local alternate = provider and provider.alternate_file and provider.alternate_file()
-        if not alternate or alternate == "" then
-            return nil
-        end
-        if not vim.startswith(alternate, "/") then
-            alternate = vim.fs.joinpath(cwd, alternate)
-        end
-        return vim.fn.fnamemodify(alternate, ":p")
-    end,
-}
-
---- Absolutizes a provider-supplied path against the execution CWD.
+--- Absolutizes a path against the execution CWD.
 local function absolutize(path, cwd)
     if not vim.startswith(path, "/") then
         path = vim.fs.joinpath(cwd, path)
@@ -57,98 +17,49 @@ local function absolutize(path, cwd)
     return vim.fn.fnamemodify(path, ":p")
 end
 
---- Recognized multi-character token handlers, tried longest-first after the
---- marker. Each returns the replacement string, or nil if unrecognized/unset.
-local multichar_handlers = {
-    ["<cword>"] = function(ctx)
-        local provider = ctx and ctx.context_provider
-        local word = provider and provider.cursor_word and provider.cursor_word()
-        if not word or word == "" then
-            return nil
-        end
-        return word
-    end,
-    ["<cWORD>"] = function(ctx)
-        local provider = ctx and ctx.context_provider
-        local word = provider and provider.cursor_WORD and provider.cursor_WORD()
-        if not word or word == "" then
-            return nil
-        end
-        return word
-    end,
-    ["<cfile>"] = function(ctx, cwd)
-        local provider = ctx and ctx.context_provider
-        local file = provider and provider.cursor_file and provider.cursor_file()
-        if not file or file == "" then
-            return nil
-        end
-        return absolutize(file, cwd)
-    end,
-}
+--- Multi-character tokens, tried longest-first after the marker.
+local MULTICHAR_TOKENS = { "<cWORD>", "<cword>", "<cfile>" }
 
---- Resolves a buffer-number token (`@#N`): consumes the digits following `#`
---- and returns buffer N's file path, absolutized against the CWD.
-local function buffer_number_token(ctx, cwd, line, start)
-    local provider = ctx and ctx.context_provider
-    if not (provider and provider.buffer_file) then
-        return nil
-    end
-    local digits = line:match("^%d+", start)
-    if not digits then
-        return nil
-    end
-    local path = provider.buffer_file(tonumber(digits))
-    if not path or path == "" then
-        return nil
-    end
-    if not vim.startswith(path, "/") then
-        path = vim.fs.joinpath(cwd, path)
-    end
-    return vim.fn.fnamemodify(path, ":p"), #digits
-end
-
---- Applies a single filename modifier to a path-like string, resolving
---- relative forms (`:.`, `:~`) against the execution CWD and $HOME.
-local function apply_modifier(text, mod, cwd)
-    if mod == "p" then
-        if not vim.startswith(text, "/") then
-            text = vim.fs.joinpath(cwd, text)
+--- Resolves the token following the marker at `i` through native expand().
+--- Returns the replacement and the number of characters consumed (including
+--- the marker), or nil when the token resolves to nothing.
+local function resolve_token(line, i, cwd)
+    local rest = line:sub(i + 1)
+    if rest:sub(1, 1) == "%" then
+        local file = vim.fn.expand "%"
+        if file == "" then
+            return nil
         end
-        return vim.fn.fnamemodify(text, ":p")
-    elseif mod == "~" then
-        local home = vim.env.HOME or ""
-        if home ~= "" then
-            if text == home then
-                return "~"
+        return absolutize(file, cwd), 2
+    end
+    if rest:sub(1, 1) == "#" then
+        local digits = rest:match "^#(%d+)"
+        local file = vim.fn.expand(digits and "#" .. digits or "#")
+        if file == "" then
+            return nil
+        end
+        return absolutize(file, cwd), digits and #digits + 2 or 2
+    end
+    for _, token in ipairs(MULTICHAR_TOKENS) do
+        if rest:sub(1, #token) == token then
+            local value = vim.fn.expand(token)
+            if value == "" then
+                return nil
             end
-            local prefix = home .. "/"
-            if vim.startswith(text, prefix) then
-                return "~" .. text:sub(#prefix)
+            if token == "<cfile>" then
+                value = absolutize(value, cwd)
             end
+            return value, #token + 1
         end
-        return text
-    elseif mod == "." then
-        local norm_cwd = cwd:sub(-1) == "/" and cwd:sub(1, -2) or cwd
-        if text == norm_cwd then
-            return "."
-        end
-        local prefix = norm_cwd .. "/"
-        if vim.startswith(text, prefix) then
-            return "." .. text:sub(#prefix)
-        end
-        return text
-    elseif mod == "S" or mod == "q" then
-        return vim.fn.shellescape(text)
-    else
-        return vim.fn.fnamemodify(text, ":" .. mod)
     end
+    return nil
 end
 
 --- Parses a chain of filename modifiers following a token site.
---- Returns the list of modifiers, characters consumed, and an
---- "unsupported" flag when a substitution modifier (`:s///`, `:gs///`)
---- is encountered — in that case the whole marked site falls back to
---- passthrough rather than being partially parsed.
+--- Returns the list of modifiers, characters consumed, and an "unsupported"
+--- flag when a substitution modifier (`:s///`, `:gs///`) is encountered — in
+--- that case the whole marked site falls back to passthrough rather than
+--- being partially parsed.
 local function parse_modifiers(line, start)
     local mods = {}
     local j = start
@@ -175,13 +86,32 @@ local function parse_modifiers(line, start)
     return mods, j - start, false
 end
 
+--- Applies a modifier chain left-to-right. `:p` and `:.` resolve against the
+--- execution CWD; `:S`/`:q` shell-quote; the rest are native fnamemodify.
+local function apply_modifiers(text, mods, cwd)
+    for _, m in ipairs(mods) do
+        if m == "p" then
+            text = absolutize(text, cwd)
+        elseif m == "." then
+            local norm = cwd:sub(-1) == "/" and cwd:sub(1, -2) or cwd
+            if text == norm then
+                text = "."
+            elseif vim.startswith(text, norm .. "/") then
+                text = "." .. text:sub(#norm + 1)
+            end
+        elseif m == "S" or m == "q" then
+            text = vim.fn.shellescape(text)
+        else
+            text = vim.fn.fnamemodify(text, ":" .. m)
+        end
+    end
+    return text
+end
+
 ---@param line string The raw typed command line.
 ---@param cwd string The execution working directory.
----@param opts? cling.ExpandOpts Options with the injected context provider.
 ---@return string expanded The expanded command line.
-function M.expand(line, cwd, opts)
-    opts = opts or {}
-    local ctx = opts.context
+function M.expand(line, cwd)
     local out = {}
     local i = 1
     while i <= #line do
@@ -193,73 +123,18 @@ function M.expand(line, cwd, opts)
             table.insert(out, "@")
             i = i + 2
         else
-            local nxt = line:sub(i + 1, i + 1)
-            if nxt == "#" then
-                local replacement, consumed = buffer_number_token(ctx, cwd, line, i + 2)
-                if replacement then
-                    local mods, mods_consumed, unsupported = parse_modifiers(line, i + 1 + consumed + 1)
-                    if not unsupported then
-                        for _, mod in ipairs(mods or {}) do
-                            replacement = apply_modifier(replacement, mod, cwd)
-                        end
-                        table.insert(out, replacement)
-                        i = i + 1 + consumed + 1 + mods_consumed
-                    else
-                        table.insert(out, c)
-                        i = i + 1
-                    end
-                else
-                    -- No usable @#N form; fall back to the bare-@# handler.
-                    local fallback = token_handlers["#"](ctx, cwd)
-                    if fallback then
-                        local mods, mods_consumed, unsupported = parse_modifiers(line, i + 2)
-                        if not unsupported then
-                            for _, mod in ipairs(mods or {}) do
-                                fallback = apply_modifier(fallback, mod, cwd)
-                            end
-                            table.insert(out, fallback)
-                            i = i + 2 + mods_consumed
-                        else
-                            table.insert(out, c)
-                            i = i + 1
-                        end
-                    else
-                        table.insert(out, c)
-                        i = i + 1
-                    end
-                end
+            local replacement, consumed = resolve_token(line, i, cwd)
+            if not replacement then
+                table.insert(out, c)
+                i = i + 1
             else
-                local replacement = nil
-                local consumed_len = nil
-                for token, handler in pairs(multichar_handlers) do
-                    if line:sub(i + 1, i + #token) == token then
-                        replacement = handler(ctx, cwd)
-                        consumed_len = #token + 1
-                        break
-                    end
-                end
-                if not replacement then
-                    local handler = token_handlers[nxt]
-                    if handler then
-                        replacement = handler(ctx, cwd)
-                        consumed_len = 2
-                    end
-                end
-                if not replacement then
+                local mods, mods_consumed, unsupported = parse_modifiers(line, i + consumed)
+                if not unsupported then
+                    table.insert(out, apply_modifiers(replacement, mods or {}, cwd))
+                    i = i + consumed + (mods_consumed or 0)
+                else
                     table.insert(out, c)
                     i = i + 1
-                else
-                    local mods, mods_consumed, unsupported = parse_modifiers(line, i + consumed_len)
-                    if not unsupported then
-                        for _, mod in ipairs(mods or {}) do
-                            replacement = apply_modifier(replacement, mod, cwd)
-                        end
-                        table.insert(out, replacement)
-                        i = i + consumed_len + mods_consumed
-                    else
-                        table.insert(out, c)
-                        i = i + 1
-                    end
                 end
             end
         end

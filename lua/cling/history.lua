@@ -24,13 +24,10 @@ end
 
 --- Add a command to the in-memory history for cwd.
 --- Deduplicates: if cmd already exists it is moved to the end.
---- Caps at max_size (default 100), evicting oldest first.
+--- Caps at 100 entries, evicting oldest first.
 --- @param cwd string
 --- @param cmd string
---- @param opts? {max_size?: integer}
-function M.add(cwd, cmd, opts)
-    opts = opts or {}
-    local max = opts.max_size or DEFAULT_MAX
+function M.add(cwd, cmd)
     _cache[cwd] = _cache[cwd] or {}
     local list = _cache[cwd]
 
@@ -43,7 +40,7 @@ function M.add(cwd, cmd, opts)
 
     table.insert(list, cmd)
 
-    while #list > max do
+    while #list > DEFAULT_MAX do
         table.remove(list, 1)
     end
 end
@@ -72,9 +69,7 @@ function M.save(cwd)
         table.insert(lines, string.format("  %q,", cmd))
     end
     table.insert(lines, "}")
-    local content = table.concat(lines, "\n") .. "\n"
-    local fs = require "cling.fs"
-    fs.write_file(history_path(cwd), content)
+    vim.fn.writefile(lines, history_path(cwd))
 end
 
 --- Load history from disk into the in-memory cache for cwd.

@@ -15,7 +15,6 @@ local value = _G.arg[5]
 -- Add plugin root to runtime path
 vim.opt.rtp:prepend(plugin_root)
 
-local fs = require "cling.fs"
 local command_node = require "cling.command_node"
 local crawler = require "cling.crawlers.help_crawler"
 local script_crawler = require "cling.crawlers.completion_script_crawler"
@@ -65,7 +64,7 @@ elseif method == "completion_cmd" then
         completions = result
     else
         -- Fallback: read content and parse as help text
-        local content = fs.read_file(temp_file)
+        local content = table.concat(vim.fn.readfile(temp_file), "\n")
         if content and content ~= "" then
             completions = command_node.parse(binary, content)
         end
@@ -77,7 +76,7 @@ end
 if completions then
     log("Writing completions to " .. outfile)
     local lua_str = "return " .. command_node.serialize(completions)
-    fs.write_file(outfile, lua_str)
+    vim.fn.writefile(vim.split(lua_str, "\n"), outfile)
 else
     log "Failed to generate completions"
     os.exit(1)

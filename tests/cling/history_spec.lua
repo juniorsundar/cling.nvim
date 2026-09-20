@@ -265,14 +265,6 @@ describe("history", function()
             local h = history.get(tmp_cwd)
             assert.are.same("cmd2", h[1], "oldest entry should be evicted when cap is exceeded")
         end)
-
-        it("respects a custom max size when provided", function()
-            for i = 1, 10 do
-                history.add(tmp_cwd, "cmd" .. i, { max_size = 5 })
-            end
-            local h = history.get(tmp_cwd)
-            assert.is_true(#h <= 5, "history should be capped at custom max of 5, got " .. #h)
-        end)
     end)
 
     describe("round-trip persistence", function()

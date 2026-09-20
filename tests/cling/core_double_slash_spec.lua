@@ -20,7 +20,6 @@ describe("core executor with '//' inside the command", function()
         core.last_cwd = nil
         core.last_smods = nil
 
-        core._reset_column_capture()
         history.clear "/tmp"
 
         while vim.fn.tabpagenr "$" > 1 do

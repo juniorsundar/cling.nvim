@@ -16,12 +16,9 @@ end, {
             return {}
         end
 
-        local filtered = {}
-        for _, item in ipairs(completions) do
-            if vim.startswith(item, arglead) then
-                table.insert(filtered, item)
-            end
-        end
+        local filtered = vim.tbl_filter(function(item)
+            return vim.startswith(item, arglead)
+        end, completions)
         return filtered
     end,
 })
