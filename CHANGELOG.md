@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1](https://github.com/juniorsundar/cling.nvim/compare/v0.6.0...v0.6.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* Running commands with URLs caused errors ([9e43d42](https://github.com/juniorsundar/cling.nvim/commit/9e43d429bd71a16c5554633a35cdafa9170186cb))
+
+
+### Code Refactoring
+
+* Pruned dead or redundant code ([d685901](https://github.com/juniorsundar/cling.nvim/commit/d6859019b960103ded4530016f15954dc5ef36bc))
+
 ## [0.6.0](https://github.com/juniorsundar/cling.nvim/compare/v0.5.0...v0.6.0) (2026-08-24)
 
 
